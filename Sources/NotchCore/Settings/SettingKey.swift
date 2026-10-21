@@ -52,28 +52,36 @@ public enum Defaults {
     }
 }
 
-private final class DefaultsObserver: NSObject {
+/// KVO can't be used here: it reads dotted names like "general.displayTarget" as nested key paths.
+@MainActor
+private final class DefaultsObserver {
     private let names: [String]
     private let handler: @MainActor () -> Void
+    private var snapshot: [String: NSObject?]
+    private var token: NSObjectProtocol?
 
     init(names: [String], handler: @escaping @MainActor () -> Void) {
         self.names = names
         self.handler = handler
-        super.init()
-        for name in names {
-            Defaults.store.addObserver(self, forKeyPath: name, options: [.new], context: nil)
+        snapshot = Self.read(names)
+        token = NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.check() }
         }
     }
 
-    deinit {
-        for name in names {
-            Defaults.store.removeObserver(self, forKeyPath: name)
-        }
+    isolated deinit {
+        if let token { NotificationCenter.default.removeObserver(token) }
     }
 
-    override func observeValue(forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey: Any]?, context: UnsafeMutableRawPointer?) {
-        let handler = handler
-        DispatchQueue.main.async { MainActor.assumeIsolated { handler() } }
+    private func check() {
+        let current = Self.read(names)
+        guard current != snapshot else { return }
+        snapshot = current
+        handler()
+    }
+
+    private static func read(_ names: [String]) -> [String: NSObject?] {
+        Dictionary(uniqueKeysWithValues: names.map { ($0, Defaults.store.object(forKey: $0) as? NSObject) })
     }
 }
 

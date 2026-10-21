@@ -1,8 +1,73 @@
 import NotchCore
+import SwiftUI
 
 @MainActor
 public final class CalendarFeature: NotchFeature {
-    public init() {}
-    public func start() {}
-    public func stop() {}
+    private let manager = CalendarManager.shared
+    private let activities: CalendarActivities
+    private let timeToLeave: TimeToLeave
+    private var settingsObserver: AnyObject?
+    private var widgetRegistered = false
+
+    public init() {
+        activities = CalendarActivities(manager: manager)
+        timeToLeave = TimeToLeave(manager: manager)
+    }
+
+    public func start() {
+        let registry = NotchRegistry.shared
+        let timeToLeave = timeToLeave
+        registry.register(settingsPane: SettingsPane(id: "calendar", title: "Calendar", symbol: "calendar", color: .red, order: 60) {
+            CalendarSettingsView(timeToLeave: timeToLeave)
+        })
+        registry.register(permission: manager.permission)
+        registry.register(idleProvider: activities)
+
+        manager.onUpdate = { [weak self] in
+            self?.activities.update()
+            self?.timeToLeave.update()
+        }
+        timeToLeave.start()
+        settingsObserver = Defaults.observe([
+            CalendarSettings.enabled.name,
+            CalendarSettings.notifyBeforeEvent.name,
+            CalendarSettings.timeBeforeEvent.name,
+            CalendarSettings.notifyWhenEventStarts.name,
+            CalendarSettings.disableActivityDuringEvents.name,
+            CalendarSettings.useColoredCalendarIndicator.name,
+            CalendarSettings.playHourlyChime.name,
+        ]) { [weak self] in self?.apply() }
+        apply()
+    }
+
+    public func stop() {
+        settingsObserver = nil
+        manager.onUpdate = nil
+        manager.stop()
+        timeToLeave.stop()
+        activities.stop()
+        if widgetRegistered {
+            NotchRegistry.shared.unregister(homeWidgetID: "calendar")
+            widgetRegistered = false
+        }
+    }
+
+    private func apply() {
+        let registry = NotchRegistry.shared
+        if Defaults[CalendarSettings.enabled] {
+            if !widgetRegistered {
+                registry.register(homeWidget: HomeWidget(id: "calendar", kind: .calendar) { CalendarWidget() })
+                widgetRegistered = true
+            }
+            manager.start()
+            activities.update()
+        } else {
+            if widgetRegistered {
+                registry.unregister(homeWidgetID: "calendar")
+                widgetRegistered = false
+            }
+            manager.stop()
+            activities.stop()
+        }
+    }
 }
