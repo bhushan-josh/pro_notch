@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key><string>en</string>
+	<key>CFBundleExecutable</key><string>Notch</string>
+	<key>CFBundleIconFile</key><string>AppIcon</string>
+	<key>CFBundleIdentifier</key><string>com.personal.Notch</string>
+	<key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+	<key>CFBundleName</key><string>Notch</string>
+	<key>CFBundleDisplayName</key><string>Notch</string>
+	<key>CFBundlePackageType</key><string>APPL</string>
+	<key>CFBundleShortVersionString</key><string>1.0.0</string>
+	<key>CFBundleVersion</key><string>1</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key><string>Editor</string>
+			<key>CFBundleURLName</key><string>com.personal.Notch</string>
+			<key>CFBundleURLSchemes</key><array><string>notch</string></array>
+		</dict>
+	</array>
+	<key>LSApplicationCategoryType</key><string>public.app-category.productivity</string>
+	<key>LSMinimumSystemVersion</key><string>15.0</string>
+	<key>LSUIElement</key><true/>
+	<key>NSPrincipalClass</key><string>NSApplication</string>
+	<key>NSHighResolutionCapable</key><true/>
+	<key>NSAppleEventsUsageDescription</key><string>Notch controls and displays the music playing in Music, Spotify and your browser.</string>
+	<key>NSAudioCaptureUsageDescription</key><string>Notch listens to system audio output to draw the live waveform.</string>
+	<key>NSBluetoothAlwaysUsageDescription</key><string>Notch shows your connected audio devices and their battery levels.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key><string>Notch shows your upcoming events.</string>
+	<key>NSCalendarsUsageDescription</key><string>Notch shows your upcoming events.</string>
+	<key>NSLocationUsageDescription</key><string>Notch uses your location for local weather and travel time to events.</string>
+	<key>NSLocationWhenInUseUsageDescription</key><string>Notch uses your location for local weather and travel time to events.</string>
+</dict>
+</plist>
