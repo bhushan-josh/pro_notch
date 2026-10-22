@@ -8,18 +8,19 @@ struct FileTile: View {
 
     @State private var isHovering = false
     @State private var anchor = ViewAnchor.Box()
+    @AppStorage(FileTraySettings.tileSize) private var size
 
     var body: some View {
         VStack(spacing: 5) {
             thumbnail
-                .frame(width: 56, height: 56)
+                .frame(width: size.thumbnail, height: size.thumbnail)
             Text(item.name)
                 .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(.white.opacity(0.85))
                 .lineLimit(2)
                 .truncationMode(.middle)
                 .multilineTextAlignment(.center)
-                .frame(width: 72, height: 26, alignment: .top)
+                .frame(width: size.labelWidth, height: 26, alignment: .top)
         }
         .padding(.top, 8)
         .padding(.horizontal, 4)
@@ -42,7 +43,7 @@ struct FileTile: View {
             provider.suggestedName = item.url.lastPathComponent
             return provider
         } preview: {
-            thumbnail.frame(width: 56, height: 56)
+            thumbnail.frame(width: size.thumbnail, height: size.thumbnail)
         }
         .contextMenu { menu }
         .help([item.name, item.formattedSize].compactMap { $0 }.joined(separator: " - "))

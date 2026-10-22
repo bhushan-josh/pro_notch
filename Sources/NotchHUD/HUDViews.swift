@@ -25,20 +25,49 @@ enum HUDKind: String, CaseIterable, Sendable {
     }
 
     var isEnabled: Bool { Defaults[enabledKey] }
+
+    var levelColorsKey: SettingKey<Bool> {
+        switch self {
+        case .volume: HUDSettings.levelColorsVolume
+        case .brightness: HUDSettings.levelColorsBrightness
+        case .keyboard: HUDSettings.levelColorsKeyboard
+        }
+    }
+
+    /// Level coloring for this kind, or nil when it is off for this kind.
+    var levelColors: LevelColors? {
+        let colors = HUDSettings.levelColors
+        guard colors.mode != .off, Defaults[levelColorsKey] else { return nil }
+        return colors
+    }
 }
 
 @MainActor
 @Observable
 final class HUDLevelModel {
+    let kind: HUDKind
     var value: Double = 0
     var symbol = "speaker.wave.2.fill"
     var isDimmed = false
+    /// Bumped when level color settings change so open HUDs repaint.
+    var colorRevision = 0
+
+    init(kind: HUDKind) {
+        self.kind = kind
+    }
 }
 
 /// Builds and presents the level HUDs. Each kind keeps one model so repeated presses animate in place.
 @MainActor
 final class HUDPresenter {
     private var models: [HUDKind: HUDLevelModel] = [:]
+    private var colorObserver: AnyObject?
+
+    init() {
+        colorObserver = Defaults.observe(HUDSettings.levelColorKeys) { [weak self] in
+            self?.models.values.forEach { $0.colorRevision += 1 }
+        }
+    }
 
     static let outputActivityID = "hud.output"
 
@@ -48,7 +77,7 @@ final class HUDPresenter {
 
     func show(_ kind: HUDKind, value: Double, symbol: String, dimmed: Bool = false) {
         guard kind.isEnabled else { return }
-        let model = models[kind] ?? HUDLevelModel()
+        let model = models[kind] ?? HUDLevelModel(kind: kind)
         models[kind] = model
         let visible = isVisible(kind)
         let showPercentage = Defaults[HUDSettings.showPercentage]
@@ -126,8 +155,12 @@ struct HUDLeadingView: View {
     let model: HUDLevelModel
 
     var body: some View {
-        Image(systemName: model.symbol)
+        _ = model.colorRevision
+        let colors = model.kind.levelColors
+        let tint = Defaults[HUDSettings.levelColorsTintIcon] && !model.isDimmed ? colors?.color(at: model.value) : nil
+        return Image(systemName: model.symbol)
             .font(.system(size: 14, weight: .semibold))
+            .foregroundStyle(tint ?? .white)
             .contentTransition(.symbolEffect(.replace))
             .frame(width: 22, alignment: .center)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
@@ -139,10 +172,15 @@ struct HUDTrailingView: View {
     let showPercentage: Bool
     @AppStorage(CoreSettings.hudProgressStyle) private var style
 
+    private var levelColors: LevelColors? {
+        _ = model.colorRevision
+        return model.kind.levelColors
+    }
+
     var body: some View {
         let value = model.isDimmed ? 0 : model.value
         HStack(spacing: 6) {
-            NotchProgressBar(value: value, style: style)
+            NotchProgressBar(value: value, style: style, levelColors: levelColors)
                 .frame(width: showPercentage ? 52 : 80)
             if showPercentage {
                 Text("\(Int((value * 100).rounded()))%")

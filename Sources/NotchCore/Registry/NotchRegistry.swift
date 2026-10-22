@@ -15,13 +15,16 @@ public struct NotchPage: Identifiable {
     public var title: String
     public var symbol: String
     public var order: Int
+    /// Set to let the user drag the open island's bottom edge and corners to resize this page.
+    public var resize: PageResize?
     public var content: () -> AnyView
 
-    public init(id: String, title: String, symbol: String, order: Int, @ViewBuilder content: @escaping () -> some View) {
+    public init(id: String, title: String, symbol: String, order: Int, resize: PageResize? = nil, @ViewBuilder content: @escaping () -> some View) {
         self.id = id
         self.title = title
         self.symbol = symbol
         self.order = order
+        self.resize = resize
         self.content = { AnyView(content()) }
     }
 }

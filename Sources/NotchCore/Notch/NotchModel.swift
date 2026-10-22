@@ -81,10 +81,23 @@ public enum NotchLayout {
         )
     }
 
+    /// The open size for a page, honoring a size the user dragged a resizable page to.
+    @MainActor
+    public static func openSize(geometry: NotchGeometry, page: NotchPage?) -> CGSize {
+        let standard = openSize(geometry: geometry)
+        guard let page, let resize = page.resize, let custom = PageSizeStore.shared.size(for: page.id) else { return standard }
+        return resize.clamp(custom)
+    }
+
+    /// Largest open island any page may be resized to.
+    public static let maxResizableSize = CGSize(width: 960, height: 520)
+
     /// Window size large enough for every state, the hover scale and the shadow.
     public static func windowSize(geometry: NotchGeometry) -> CGSize {
         let open = openSize(geometry: geometry)
-        return CGSize(width: open.width + topRadius(open: true) * 2 + 120, height: open.height + 60)
+        let width = max(open.width, maxResizableSize.width) + topRadius(open: true) * 2 + 120
+        let height = max(open.height, maxResizableSize.height) + 60
+        return CGSize(width: width, height: height)
     }
 }
 
@@ -97,6 +110,8 @@ public final class NotchModel {
     public internal(set) var isHovering = false
     /// Mouse button held on the closed island.
     public internal(set) var isPressed = false
+    /// A page resize drag is in progress; the island must not close under the pointer.
+    public internal(set) var isResizing = false
     public var selectedPageID = NotchModel.homePageID
     /// Files are being dragged over the notch.
     public internal(set) var isDropTargeted = false

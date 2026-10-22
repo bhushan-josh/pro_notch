@@ -195,6 +195,10 @@ final class NotchWindowController {
             break
         }
 
+        if model.isResizing {
+            panel.ignoresMouseEvents = false
+            return
+        }
         let inside = interactiveRect.contains(location)
         panel.ignoresMouseEvents = !inside
 

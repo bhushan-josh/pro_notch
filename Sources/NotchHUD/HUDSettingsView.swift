@@ -55,6 +55,8 @@ struct HUDSettingsView: View {
                 HUDPreview(style: progressStyle, showPercentage: showPercentage)
             }
 
+            LevelColorsSection()
+
             Section("Sound") {
                 Picker("Output Device", selection: outputSelection) {
                     if outputs.defaultDevice == nil {
@@ -136,6 +138,99 @@ private struct HUDPreview: View {
         .padding(.horizontal, 16)
         .frame(width: 280, height: 32)
         .background(.black, in: Capsule())
+        .frame(maxWidth: .infinity)
+    }
+}
+
+private struct LevelColorsSection: View {
+    @AppStorage(HUDSettings.levelColorMode) private var mode
+    @AppStorage(HUDSettings.levelColorsVolume) private var volume
+    @AppStorage(HUDSettings.levelColorsBrightness) private var brightness
+    @AppStorage(HUDSettings.levelColorsKeyboard) private var keyboard
+    @AppStorage(HUDSettings.levelColorsTintIcon) private var tintIcon
+    @AppStorage(HUDSettings.levelMidThreshold) private var midThreshold
+    @AppStorage(HUDSettings.levelHighThreshold) private var highThreshold
+    @AppStorage(HUDSettings.levelLowColor) private var lowHex
+    @AppStorage(HUDSettings.levelMidColor) private var midHex
+    @AppStorage(HUDSettings.levelHighColor) private var highHex
+    @AppStorage(CoreSettings.hudProgressStyle) private var progressStyle
+    @State private var previewLevel = 0.65
+
+    var body: some View {
+        Section {
+            Picker("Mode", selection: $mode) {
+                ForEach(LevelColorMode.allCases, id: \.self) { Text($0.title).tag($0) }
+            }
+            if mode != .off {
+                Toggle("Volume", isOn: $volume)
+                Toggle("Brightness", isOn: $brightness)
+                Toggle("Keyboard Backlight", isOn: $keyboard)
+                Toggle("Tint Icon to Match", isOn: $tintIcon)
+                SettingsSlider("Mid Color From", value: midBinding, in: 0.05...0.9, step: 0.05, format: percent)
+                SettingsSlider("High Color From", value: highBinding, in: 0.1...1, step: 0.05, format: percent)
+                ColorPicker("Low", selection: color($lowHex, fallback: .green), supportsOpacity: false)
+                ColorPicker("Mid", selection: color($midHex, fallback: .yellow), supportsOpacity: false)
+                ColorPicker("High", selection: color($highHex, fallback: .red), supportsOpacity: false)
+                LevelPreview(level: $previewLevel, style: progressStyle, colors: HUDSettings.levelColors, tintIcon: tintIcon)
+                Button("Reset Colors") {
+                    lowHex = HUDSettings.levelLowColor.defaultValue
+                    midHex = HUDSettings.levelMidColor.defaultValue
+                    highHex = HUDSettings.levelHighColor.defaultValue
+                    midThreshold = HUDSettings.levelMidThreshold.defaultValue
+                    highThreshold = HUDSettings.levelHighThreshold.defaultValue
+                }
+            }
+        } header: {
+            Text("Level Colors")
+        } footer: {
+            Text(mode.info).font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    private var percent: (Double) -> String { { "\(Int(($0 * 100).rounded()))%" } }
+
+    private var midBinding: Binding<Double> {
+        Binding(get: { midThreshold }, set: { value in
+            midThreshold = value
+            if highThreshold <= value { highThreshold = min(1, value + 0.05) }
+        })
+    }
+
+    private var highBinding: Binding<Double> {
+        Binding(get: { highThreshold }, set: { value in
+            highThreshold = value
+            if midThreshold >= value { midThreshold = max(0.05, value - 0.05) }
+        })
+    }
+
+    private func color(_ hex: Binding<String>, fallback: Color) -> Binding<Color> {
+        Binding(get: { Color(hex: hex.wrappedValue) ?? fallback }, set: { hex.wrappedValue = $0.hexString })
+    }
+}
+
+/// A draggable sample bar so the thresholds can be tried without pressing keys.
+private struct LevelPreview: View {
+    @Binding var level: Double
+    let style: ProgressStyle
+    let colors: LevelColors
+    let tintIcon: Bool
+
+    var body: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 10) {
+                Image(systemName: level < 0.01 ? "speaker.slash.fill" : level < 0.34 ? "speaker.wave.1.fill" : level < 0.67 ? "speaker.wave.2.fill" : "speaker.wave.3.fill")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(tintIcon ? colors.color(at: level) : .white)
+                Spacer(minLength: 40)
+                NotchProgressBar(value: level, style: style, levelColors: colors)
+                    .frame(width: 80)
+            }
+            .padding(.horizontal, 16)
+            .frame(width: 280, height: 32)
+            .background(.black, in: Capsule())
+            Slider(value: $level, in: 0...1) { Text("Preview Level") }
+                .frame(width: 280)
+        }
         .frame(maxWidth: .infinity)
     }
 }

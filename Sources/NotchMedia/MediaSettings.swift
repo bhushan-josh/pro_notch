@@ -2,11 +2,12 @@ import NotchCore
 import SwiftUI
 
 public enum MediaSourceOption: String, CaseIterable, Sendable {
-    case automatic, music, spotify, system
+    case automatic, browser, music, spotify, system
 
     var title: String {
         switch self {
         case .automatic: "Automatic"
+        case .browser: "Browser"
         case .music: "Music"
         case .spotify: "Spotify"
         case .system: "System (Now Playing)"
@@ -57,7 +58,7 @@ public enum MediaExtraControl: String, CaseIterable, Sendable {
 
 public enum MediaSettings {
     public static let mediaSource = SettingKey("nowPlaying.mediaSource", default: MediaSourceOption.automatic)
-    public static let browserSource = SettingKey("nowPlaying.browserSource", default: false)
+    public static let browserSource = SettingKey("nowPlaying.browserSource", default: true)
     public static let whenMediaChanges = SettingKey("nowPlaying.whenMediaChanges", default: MediaChangeBehavior.quickPeek)
     public static let peekDuration = SettingKey("nowPlaying.peekDuration", default: 3.0)
     /// Seconds the idle activity survives a pause; 0 keeps it until the player stops.

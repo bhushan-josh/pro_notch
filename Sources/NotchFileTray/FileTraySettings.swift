@@ -19,6 +19,30 @@ public enum FileTrayStorageMode: String, CaseIterable, Sendable {
     }
 }
 
+public enum FileTileSize: String, CaseIterable, Sendable {
+    case small, medium, large
+
+    var title: String {
+        switch self {
+        case .small: "Small"
+        case .medium: "Medium"
+        case .large: "Large"
+        }
+    }
+
+    var thumbnail: CGFloat {
+        switch self {
+        case .small: 40
+        case .medium: 56
+        case .large: 76
+        }
+    }
+
+    var labelWidth: CGFloat { thumbnail + 16 }
+    /// Tile footprint including padding, used to lay out the grid.
+    var tileSize: CGSize { CGSize(width: labelWidth + 8, height: thumbnail + 46) }
+}
+
 public enum FileTraySettings {
     public static let enabled = SettingKey("fileTray.enabled", default: true)
     public static let storage = SettingKey("fileTray.storage", default: FileTrayStorageMode.copy)
@@ -26,6 +50,7 @@ public enum FileTraySettings {
     public static let maxItems = SettingKey("fileTray.maxItems", default: 30)
     public static let showAirDropTarget = SettingKey("fileTray.showAirDropTarget", default: true)
     public static let showIdleIndicator = SettingKey("fileTray.showIdleIndicator", default: false)
+    public static let tileSize = SettingKey("fileTray.tileSize", default: FileTileSize.medium)
 }
 
 struct FileTraySettingsView: View {
@@ -37,6 +62,7 @@ struct FileTraySettingsView: View {
     @AppStorage(FileTraySettings.maxItems) private var maxItems
     @AppStorage(FileTraySettings.showAirDropTarget) private var showAirDropTarget
     @AppStorage(FileTraySettings.showIdleIndicator) private var showIdleIndicator
+    @AppStorage(FileTraySettings.tileSize) private var tileSize
 
     var body: some View {
         SettingsPaneView {
@@ -63,6 +89,12 @@ struct FileTraySettingsView: View {
                 Section("Appearance") {
                     SettingsToggle("AirDrop Drop Target", info: "Show a target in the tray that sends dropped files with AirDrop.", isOn: $showAirDropTarget)
                     SettingsToggle("Idle Indicator", info: "Show the item count around the closed notch while the tray has files.", isOn: $showIdleIndicator)
+                    Picker("Tile Size", selection: $tileSize) {
+                        ForEach(FileTileSize.allCases, id: \.self) { Text($0.title).tag($0) }
+                    }
+                    LabeledContent("Tray Size") {
+                        Button("Reset Size") { PageSizeStore.shared.reset(FileTrayFeature.pageID) }
+                    }
                 }
 
                 Section {

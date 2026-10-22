@@ -54,7 +54,8 @@ public final class FileTrayFeature: NotchFeature {
         isRegistered = true
         let registry = NotchRegistry.shared
         let store = store
-        registry.register(page: NotchPage(id: Self.pageID, title: "File Tray", symbol: "tray.fill", order: 10) {
+        let resize = PageResize(minSize: CGSize(width: 420, height: 150), maxSize: NotchLayout.maxResizableSize)
+        registry.register(page: NotchPage(id: Self.pageID, title: "File Tray", symbol: "tray.fill", order: 10, resize: resize) {
             FileTrayPage(store: store)
         })
         registry.dropHandler = { providers in

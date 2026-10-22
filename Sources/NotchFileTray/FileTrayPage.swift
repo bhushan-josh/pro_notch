@@ -7,6 +7,7 @@ struct FileTrayPage: View {
 
     @Environment(NotchModel.self) private var model
     @AppStorage(FileTraySettings.showAirDropTarget) private var showAirDropTarget
+    @AppStorage(FileTraySettings.tileSize) private var tileSize
     @State private var shareAnchor = ViewAnchor.Box()
 
     var body: some View {
@@ -59,15 +60,23 @@ struct FileTrayPage: View {
         .frame(height: 22)
     }
 
+    /// One scrolling row while the tray is short; a wrapping grid once it is tall enough for two rows.
     private var tiles: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 4) {
-                ForEach(store.items) { item in
-                    FileTile(item: item, store: store)
-                        .transition(.scale(scale: 0.8).combined(with: .opacity))
+        GeometryReader { proxy in
+            let tile = tileSize.tileSize
+            if proxy.size.height >= tile.height * 2 + 4 {
+                ScrollView(.vertical, showsIndicators: false) {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: tile.width, maximum: tile.width + 12), spacing: 4)], spacing: 4) {
+                        tileViews
+                    }
+                    .padding(.top, 2)
+                }
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 4) { tileViews }
+                        .padding(.top, 2)
                 }
             }
-            .padding(.top, 2)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .background(
@@ -75,6 +84,13 @@ struct FileTrayPage: View {
                 .stroke(.white.opacity(model.isDropTargeted ? 0.35 : 0), style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
         )
         .animation(.easeOut(duration: 0.15), value: model.isDropTargeted)
+    }
+
+    private var tileViews: some View {
+        ForEach(store.items) { item in
+            FileTile(item: item, store: store)
+                .transition(.scale(scale: 0.8).combined(with: .opacity))
+        }
     }
 }
 

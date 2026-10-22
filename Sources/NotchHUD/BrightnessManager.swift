@@ -67,7 +67,9 @@ public final class BrightnessManager {
         guard let functions, isAvailable else { return }
         let value = min(max(value, 0), 1)
         let setter = smooth ? (functions.setSmooth ?? functions.set) : functions.set
-        guard setter(displayID, Float(value)) == 0 else { return }
+        let status = setter(displayID, Float(value))
+        hudLog.notice("brightness set \(value, privacy: .public) display=\(self.displayID, privacy: .public) status=\(status, privacy: .public)")
+        guard status == 0 else { return }
         brightness = value
         // The smooth ramp emits intermediate notifications; holding them off keeps the bar from stepping back.
         ownChangeUntil = Date().addingTimeInterval(smooth ? 0.7 : 0.2)
@@ -81,12 +83,16 @@ public final class BrightnessManager {
     }
 
     private func selectDisplay() {
-        guard let functions else { return }
+        guard let functions else {
+            hudLog.error("DisplayServices functions unavailable")
+            return
+        }
         let target = Self.builtInDisplayID() ?? CGMainDisplayID()
         let canChange = functions.canChange?(target) ?? true
         displayID = target
         isAvailable = canChange && read() != nil
         if let value = read() { brightness = value }
+        hudLog.notice("brightness display=\(target, privacy: .public) loaded=\(true, privacy: .public) canChange=\(canChange, privacy: .public) read=\(self.read() ?? -1, privacy: .public)")
         if isAvailable, registeredDisplay != target {
             unregister()
             if let register = functions.register, register(target, nil, brightnessChangeCallback) == 0 {

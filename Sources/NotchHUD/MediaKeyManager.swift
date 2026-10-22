@@ -61,8 +61,15 @@ final class MediaKeyManager {
         }
     }
 
+    private var loggedTrust: Bool?
+
     private func install() {
-        guard tap == nil, AXIsProcessTrusted() else { return }
+        let trusted = AXIsProcessTrusted()
+        if loggedTrust != trusted {
+            loggedTrust = trusted
+            hudLog.notice("accessibility trusted=\(trusted, privacy: .public)")
+        }
+        guard tap == nil, trusted else { return }
         let mask = CGEventMask(1) << CGEventMask(Self.systemDefinedType.rawValue)
         guard let port = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
@@ -71,7 +78,11 @@ final class MediaKeyManager {
             eventsOfInterest: mask,
             callback: mediaKeyTapCallback,
             userInfo: Unmanaged.passUnretained(self).toOpaque()
-        ) else { return }
+        ) else {
+            hudLog.error("CGEvent.tapCreate failed")
+            return
+        }
+        hudLog.notice("media key tap installed")
         let runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, port, 0)
         CFRunLoopAddSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
         CGEvent.tapEnable(tap: port, enable: true)
@@ -140,6 +151,7 @@ private let mediaKeyTapCallback: CGEventTapCallBack = { _, type, event, userInfo
     guard let userInfo else { return Unmanaged.passUnretained(event) }
     let manager = Unmanaged<MediaKeyManager>.fromOpaque(userInfo).takeUnretainedValue()
     if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+        hudLog.notice("tap disabled by system, type=\(type.rawValue, privacy: .public)")
         MainActor.assumeIsolated { manager.reenable() }
         return Unmanaged.passUnretained(event)
     }
@@ -147,5 +159,6 @@ private let mediaKeyTapCallback: CGEventTapCallBack = { _, type, event, userInfo
         return Unmanaged.passUnretained(event)
     }
     let consume = MainActor.assumeIsolated { manager.handle(decoded) }
+    hudLog.notice("key \(decoded.key.rawValue, privacy: .public) down=\(decoded.isDown, privacy: .public) consumed=\(consume, privacy: .public)")
     return consume ? nil : Unmanaged.passUnretained(event)
 }

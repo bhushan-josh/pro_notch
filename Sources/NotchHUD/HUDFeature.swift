@@ -104,6 +104,7 @@ public final class HUDFeature: NotchFeature {
 
     private func handle(_ event: MediaKeyEvent) -> Bool {
         let replace = Defaults[HUDSettings.replaceSystemHUD]
+        hudLog.notice("handle replace=\(replace, privacy: .public) volEnabled=\(HUDKind.volume.isEnabled, privacy: .public) canSet=\(self.volume.canSetVolume, privacy: .public) canMute=\(self.volume.canMute, privacy: .public) brightAvail=\(self.brightness.isAvailable, privacy: .public) vol=\(self.volume.volume, privacy: .public) bright=\(self.brightness.brightness, privacy: .public)")
         switch event.key {
         case .soundUp, .soundDown, .mute:
             guard replace, HUDKind.volume.isEnabled, volume.canSetVolume || volume.canMute else { return false }

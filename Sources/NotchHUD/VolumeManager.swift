@@ -68,7 +68,11 @@ public final class VolumeManager {
 
     public func setVolume(_ value: Double) {
         let value = min(max(value, 0), 1)
-        guard writeVolume(value) else { return }
+        guard writeVolume(value) else {
+            hudLog.error("writeVolume failed for \(value, privacy: .public)")
+            return
+        }
+        hudLog.notice("volume set \(value, privacy: .public)")
         volume = value
         if value > 0, isMuted { setMuted(false) }
     }

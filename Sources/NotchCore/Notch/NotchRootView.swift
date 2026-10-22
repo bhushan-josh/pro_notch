@@ -13,8 +13,9 @@ struct NotchRootView: View {
         let activity = open ? nil : center.current
         let kind = IslandKind(open: open, activity: activity)
         let hovering = model.isHovering && !open
+        let page = registry.pages.first { $0.id == model.selectedPageID } ?? registry.pages.first
         let size = open
-            ? NotchLayout.openSize(geometry: model.geometry)
+            ? NotchLayout.openSize(geometry: model.geometry, page: page)
             : NotchLayout.closedSize(geometry: model.geometry, activity: activity)
         let top = NotchLayout.topRadius(open: open)
         let bottom = NotchLayout.bottomRadius(open: open, hovering: hovering, activity: activity)
@@ -56,6 +57,7 @@ struct NotchRootView: View {
         .animation(IslandKind.animation(from: previousKind, to: kind), value: activity?.id)
         .animation(hovering ? .islandHover : .islandUnhover, value: hovering)
         .animation(.islandPress, value: model.isPressed)
+        .animation(.islandExpand, value: model.selectedPageID)
         .animation(.islandExpand, value: model.geometry)
         .onChange(of: kind) { _, new in previousKind = new }
         .ignoresSafeArea()
@@ -181,6 +183,11 @@ struct ExpandedNotchView: View {
             .padding(.horizontal, NotchLayout.horizontalContentPadding)
             .padding(.bottom, 14)
             .padding(.top, 4)
+        }
+        .overlay {
+            if let selected, let resize = selected.resize {
+                PageResizeHandles(page: selected, resize: resize)
+            }
         }
         .foregroundStyle(.white)
     }

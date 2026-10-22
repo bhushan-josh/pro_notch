@@ -95,6 +95,7 @@ public final class MediaManager {
         let source = Defaults[MediaSettings.mediaSource]
         let wanted: Set<MediaSourceKind> = switch source {
         case .automatic: [.music, .spotify, .system]
+        case .browser: [.browser]
         case .music: [.music]
         case .spotify: [.spotify]
         // Music and Spotify stay on as a fallback for when the system service withholds now-playing info.
@@ -102,7 +103,7 @@ public final class MediaManager {
         }
         let browserWanted = Defaults[MediaSettings.browserSource]
         for backend in backends {
-            let shouldRun = backend.kind == .browser ? browserWanted : wanted.contains(backend.kind)
+            let shouldRun = backend.kind == .browser ? (browserWanted || source == .browser) : wanted.contains(backend.kind)
             if shouldRun, !backend.isRunning {
                 backend.start()
             } else if !shouldRun, backend.isRunning {
@@ -297,11 +298,15 @@ public final class MediaManager {
         switch Defaults[MediaSettings.mediaSource] {
         case .spotify: return SpotifyBackend.bundleID
         case .music: return MusicBackend.bundleID
-        case .automatic, .system:
-            if let last = lastUsedBundleID, [MusicBackend.bundleID, SpotifyBackend.bundleID].contains(last),
-               NSWorkspace.shared.urlForApplication(withBundleIdentifier: last) != nil { return last }
-            return MusicBackend.bundleID
+        case .automatic, .system, .browser:
+            if let last = lastUsedBundleID, NSWorkspace.shared.urlForApplication(withBundleIdentifier: last) != nil { return last }
+            return Self.defaultBrowserBundleID ?? BrowserBackend.Browser.chrome.rawValue
         }
+    }
+
+    private static var defaultBrowserBundleID: String? {
+        guard let url = NSWorkspace.shared.urlForApplication(toOpen: URL(string: "https://example.com")!) else { return nil }
+        return Bundle(url: url)?.bundleIdentifier
     }
 
     func supports(_ capability: MediaCapability) -> Bool { capabilities.contains(capability) }
@@ -357,6 +362,10 @@ public final class MediaManager {
     }
 
     func openSourceApp() {
+        if track.map({ BrowserBackend.Browser(rawValue: $0.bundleID ?? "") != nil }) == true {
+            browser.revealActiveTab()
+            return
+        }
         open(bundleID: track?.bundleID ?? preferredAppBundleID)
     }
 

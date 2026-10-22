@@ -10,11 +10,13 @@ enum MediaPermissions {
 
     static func register() {
         let registry = NotchRegistry.shared
-        let apps: [(name: String, bundleID: String, symbol: String)] = [
-            ("Music", MusicBackend.bundleID, "music.note"),
+        let browsers = BrowserBackend.Browser.allCases.map { (name: $0.name, bundleID: $0.rawValue, symbol: "globe") }
+        let apps: [(name: String, bundleID: String, symbol: String)] = browsers + [
             ("Spotify", SpotifyBackend.bundleID, "beats.headphones"),
+            ("Music", MusicBackend.bundleID, "music.note"),
         ]
-        for app in apps where app.bundleID == MusicBackend.bundleID || isInstalled(app.bundleID) {
+        let wantsMusic = Defaults[MediaSettings.mediaSource] == .music
+        for app in apps where isInstalled(app.bundleID) && (app.bundleID != MusicBackend.bundleID || wantsMusic) {
             registry.register(permission: PermissionRequirement(
                 id: "media.automation.\(app.name.lowercased())",
                 title: "Control \(app.name)",
