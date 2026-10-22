@@ -95,15 +95,18 @@ public final class MediaManager {
         let source = Defaults[MediaSettings.mediaSource]
         let wanted: Set<MediaSourceKind> = switch source {
         case .automatic: [.music, .spotify, .system]
-        case .browser: [.browser]
         case .music: [.music]
         case .spotify: [.spotify]
         // Music and Spotify stay on as a fallback for when the system service withholds now-playing info.
         case .system: [.system, .music, .spotify]
+        default: [.browser]
         }
+        browser.allowed = source.browser.map { [$0] }
         let browserWanted = Defaults[MediaSettings.browserSource]
         for backend in backends {
-            let shouldRun = backend.kind == .browser ? (browserWanted || source == .browser) : wanted.contains(backend.kind)
+            let shouldRun = backend.kind == .browser
+                ? (source.isBrowserSource || (source == .automatic && browserWanted))
+                : wanted.contains(backend.kind)
             if shouldRun, !backend.isRunning {
                 backend.start()
             } else if !shouldRun, backend.isRunning {
@@ -298,7 +301,7 @@ public final class MediaManager {
         switch Defaults[MediaSettings.mediaSource] {
         case .spotify: return SpotifyBackend.bundleID
         case .music: return MusicBackend.bundleID
-        case .automatic, .system, .browser:
+        default:
             if let last = lastUsedBundleID, NSWorkspace.shared.urlForApplication(withBundleIdentifier: last) != nil { return last }
             return Self.defaultBrowserBundleID ?? BrowserBackend.Browser.chrome.rawValue
         }
@@ -314,11 +317,7 @@ public final class MediaManager {
     // MARK: Commands
 
     func togglePlayPause() {
-        guard let active else {
-            openPreferredApp()
-            return
-        }
-        active.send(.togglePlayPause)
+        active?.send(.togglePlayPause)
     }
 
     func next() { active?.send(.next) }
@@ -370,10 +369,7 @@ public final class MediaManager {
     }
 
     func showInApp() {
-        guard let track else {
-            openPreferredApp()
-            return
-        }
+        guard let track else { return }
         switch track.bundleID {
         case MusicBackend.bundleID:
             music.revealCurrentTrack()
@@ -388,7 +384,6 @@ public final class MediaManager {
         }
     }
 
-    func openPreferredApp() { open(bundleID: preferredAppBundleID) }
 
     private func open(bundleID: String) {
         if let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first {

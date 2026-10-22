@@ -334,41 +334,49 @@ struct NowPlayingWidget: View {
     }
 }
 
+/// The player with nothing loaded: placeholder artwork, empty progress and dimmed controls, no app launching.
 struct NotPlayingView: View {
-    private let manager = MediaManager.shared
-
     var body: some View {
-        let bundleID = manager.preferredAppBundleID
-        VStack(spacing: 10) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(.white.opacity(0.08))
-                    .frame(width: 64, height: 64)
-                Image(systemName: "music.note")
-                    .font(.system(size: 26, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.4))
-            }
-            Text("Not Playing")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.75))
-            Button {
-                manager.openPreferredApp()
-            } label: {
-                HStack(spacing: 6) {
-                    if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
-                        Image(nsImage: NSWorkspace.shared.icon(forFile: url.path))
-                            .resizable()
-                            .frame(width: 16, height: 16)
-                    }
-                    Text("Open \(manager.sourceAppName)")
-                        .font(.system(size: 12, weight: .medium))
+        let dim = Color.white.opacity(0.4)
+        VStack(spacing: 0) {
+            HStack(spacing: 0) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(.white.opacity(0.1))
+                    Image(systemName: "music.note")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.3))
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(.white.opacity(0.12), in: Capsule())
-                .contentShape(Capsule())
+                .frame(width: 56, height: 56)
+                Text("Not Playing")
+                    .font(.system(size: 13.5, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.5))
+                    .padding(.leading, 14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                HStack(spacing: 1.5) {
+                    ForEach(0..<4, id: \.self) { _ in
+                        RoundedRectangle(cornerRadius: 1).fill(.white.opacity(0.25)).frame(width: 2, height: 2)
+                    }
+                }
+                .frame(width: 20)
+                .padding(.leading, 8)
+                .padding(.trailing, 4)
             }
-            .buttonStyle(PressScaleStyle())
+            HStack(spacing: 8) {
+                Text("-:--").frame(minWidth: 26, alignment: .leading)
+                Capsule().fill(.white.opacity(0.15)).frame(height: 6)
+                Text("-:--").frame(minWidth: 26, alignment: .trailing)
+            }
+            .font(.system(size: 10, weight: .bold).monospacedDigit())
+            .foregroundStyle(dim)
+            .padding(.top, 14)
+            Spacer(minLength: 2)
+            HStack(spacing: 6) {
+                MediaButton(symbol: "backward.fill", size: 19, isEnabled: false) {}
+                MediaButton(symbol: "play.fill", size: 25, isEnabled: false) {}
+                MediaButton(symbol: "forward.fill", size: 19, isEnabled: false) {}
+            }
+            .frame(maxWidth: .infinity)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -385,8 +393,6 @@ struct MediaContextMenu: View {
             Divider()
             Button("Copy Link") { manager.copyLink() }
             Button("Show in \(manager.sourceAppName)") { manager.showInApp() }
-        } else {
-            Button("Open \(manager.sourceAppName)") { manager.openPreferredApp() }
         }
     }
 }

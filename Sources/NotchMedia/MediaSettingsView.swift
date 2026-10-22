@@ -24,9 +24,9 @@ struct MediaSettingsView: View {
         SettingsPaneView {
             Section {
                 Picker("Media Source", selection: $mediaSource) {
-                    ForEach(MediaSourceOption.allCases, id: \.self) { Text($0.title).tag($0) }
+                    ForEach(MediaSourceOption.allCases.filter(\.isAvailable), id: \.self) { Text($0.title).tag($0) }
                 }
-                if mediaSource != .browser {
+                if mediaSource == .automatic {
                     SettingsToggle(
                         "Include Browsers",
                         info: "Control music and videos playing in any browser tab.",
@@ -36,13 +36,11 @@ struct MediaSettingsView: View {
             } header: {
                 Text("Source")
             } footer: {
-                Text("Automatic follows whichever player started most recently. Music and Spotify are only controlled while they are open.")
+                Text("Automatic follows whichever player started most recently. Choose a single player to control only that one. Players are only read while they are open.")
                     .font(.caption).foregroundStyle(.secondary)
             }
 
-            if browserSource || mediaSource == .browser {
-                BrowserSetupSection()
-            }
+            PlayersSection(source: mediaSource, includeBrowsers: browserSource)
 
             Section("Activity") {
                 Picker("When Media Changes", selection: $whenMediaChanges) {
@@ -94,39 +92,61 @@ struct MediaSettingsView: View {
     }
 }
 
-private struct BrowserSetupSection: View {
+private struct PlayersSection: View {
+    let source: MediaSourceOption
+    let includeBrowsers: Bool
+
     private let access = BrowserAccess.shared
-    @State private var testing: BrowserBackend.Browser?
+    @State private var testing: String?
+    @State private var refresh = 0
 
     var body: some View {
-        let browsers = BrowserBackend.Browser.allCases.filter(\.isInstalled)
+        let browsers: [BrowserBackend.Browser] = {
+            if let only = source.browser { return [only] }
+            if source == .browser || (source == .automatic && includeBrowsers) { return BrowserBackend.Browser.allCases.filter(\.isInstalled) }
+            return []
+        }()
+        let showsMusic = [.automatic, .music, .system].contains(source)
         Section {
             ForEach(browsers) { browser in
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    statusIcon(for: browser)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(browser.name)
-                        Text(detail(for: browser))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    Spacer()
-                    Button(testing == browser ? "Testing…" : "Test") {
-                        testing = browser
-                        Task {
-                            await MediaManager.shared.browser.test(browser)
-                            testing = nil
-                        }
-                    }
-                    .disabled(testing != nil)
+                row(name: browser.name, id: browser.rawValue, icon: browserIcon(browser), detail: detail(for: browser)) {
+                    await MediaManager.shared.browser.test(browser)
+                }
+            }
+            if showsMusic {
+                row(name: "Music", id: MusicBackend.bundleID, icon: musicIcon, detail: musicDetail) {
+                    await MediaPermissions.requestAutomation(bundleID: MusicBackend.bundleID)
+                    refresh += 1
                 }
             }
         } header: {
-            Text("Browsers")
+            Text("Players")
         } footer: {
-            Text("Browsers only let other apps read a tab after you allow it once. Each browser also asks for permission the first time Dynamic Notch connects.")
+            Text("Browsers only let other apps read a tab after you allow it once. Each player also asks for permission the first time Dynamic Notch connects.")
                 .font(.caption).foregroundStyle(.secondary)
+        }
+        .id(refresh)
+    }
+
+    private func row(name: String, id: String, icon: AnyView, detail: String, test: @escaping () async -> Void) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            icon
+            VStack(alignment: .leading, spacing: 2) {
+                Text(name)
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+            Button(testing == id ? "Testing…" : "Test") {
+                testing = id
+                Task {
+                    await test()
+                    testing = nil
+                }
+            }
+            .disabled(testing != nil)
         }
     }
 
@@ -140,15 +160,32 @@ private struct BrowserSetupSection: View {
         return browser.setupHint
     }
 
-    @ViewBuilder
-    private func statusIcon(for browser: BrowserBackend.Browser) -> some View {
+    private func browserIcon(_ browser: BrowserBackend.Browser) -> AnyView {
         let status = access.statuses[browser]
-        if status?.javaScriptAllowed == true, status?.automationAllowed != false {
-            Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
-        } else if status?.javaScriptAllowed == false || status?.automationAllowed == false {
-            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
-        } else {
-            Image(systemName: "circle.dashed").foregroundStyle(.secondary)
+        if status?.javaScriptAllowed == true, status?.automationAllowed != false { return AnyView(Self.ready) }
+        if status?.javaScriptAllowed == false || status?.automationAllowed == false { return AnyView(Self.warning) }
+        return AnyView(Self.unknown)
+    }
+
+    private var musicStatus: PermissionStatus { MediaPermissions.automationStatus(bundleID: MusicBackend.bundleID) }
+
+    private var musicDetail: String {
+        switch musicStatus {
+        case .granted: "Ready. Controlled while Music is open."
+        case .denied: "Allow Dynamic Notch to control Music in System Settings > Privacy & Security > Automation."
+        case .notDetermined: "Test asks for permission to read and control Music."
         }
     }
+
+    private var musicIcon: AnyView {
+        switch musicStatus {
+        case .granted: AnyView(Self.ready)
+        case .denied: AnyView(Self.warning)
+        case .notDetermined: AnyView(Self.unknown)
+        }
+    }
+
+    private static var ready: some View { Image(systemName: "checkmark.circle.fill").foregroundStyle(.green) }
+    private static var warning: some View { Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange) }
+    private static var unknown: some View { Image(systemName: "circle.dashed").foregroundStyle(.secondary) }
 }

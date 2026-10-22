@@ -15,8 +15,7 @@ enum MediaPermissions {
             ("Spotify", SpotifyBackend.bundleID, "beats.headphones"),
             ("Music", MusicBackend.bundleID, "music.note"),
         ]
-        let wantsMusic = Defaults[MediaSettings.mediaSource] == .music
-        for app in apps where isInstalled(app.bundleID) && (app.bundleID != MusicBackend.bundleID || wantsMusic) {
+        for app in apps where isInstalled(app.bundleID) {
             registry.register(permission: PermissionRequirement(
                 id: "media.automation.\(app.name.lowercased())",
                 title: "Control \(app.name)",

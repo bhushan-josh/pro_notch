@@ -1,17 +1,47 @@
+import AppKit
 import NotchCore
 import SwiftUI
 
 public enum MediaSourceOption: String, CaseIterable, Sendable {
-    case automatic, browser, music, spotify, system
+    case automatic, brave, chrome, safari, edge, arc, vivaldi, opera, dia, browser, music, spotify, system
 
+    @MainActor
     var title: String {
+        if let browser { return browser.name }
         switch self {
-        case .automatic: "Automatic"
-        case .browser: "Browser"
-        case .music: "Music"
-        case .spotify: "Spotify"
-        case .system: "System (Now Playing)"
+        case .automatic: return "Automatic"
+        case .browser: return "All Browsers"
+        case .music: return "Music"
+        case .spotify: return "Spotify"
+        default: return "System (Now Playing)"
         }
+    }
+
+    /// The single browser this option restricts playback to, if any.
+    @MainActor
+    var browser: BrowserBackend.Browser? {
+        switch self {
+        case .brave: .brave
+        case .chrome: .chrome
+        case .safari: .safari
+        case .edge: .edge
+        case .arc: .arc
+        case .vivaldi: .vivaldi
+        case .opera: .opera
+        case .dia: .dia
+        default: nil
+        }
+    }
+
+    @MainActor
+    var isBrowserSource: Bool { self == .browser || browser != nil }
+
+    /// Hides options for players that are not installed.
+    @MainActor
+    var isAvailable: Bool {
+        if let browser { return browser.isInstalled }
+        if self == .spotify { return NSWorkspace.shared.urlForApplication(withBundleIdentifier: SpotifyBackend.bundleID) != nil }
+        return true
     }
 }
 

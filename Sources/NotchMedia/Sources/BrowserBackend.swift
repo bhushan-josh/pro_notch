@@ -8,7 +8,7 @@ import Observation
 /// `BrowserAccess` reports that per browser so Settings can explain what to enable.
 @MainActor
 final class BrowserBackend: PollingBackend {
-    enum Browser: String, CaseIterable, Identifiable {
+    enum Browser: String, CaseIterable, Identifiable, Hashable {
         case brave = "com.brave.Browser"
         case chrome = "com.google.Chrome"
         case safari = "com.apple.Safari"
@@ -58,6 +58,10 @@ final class BrowserBackend: PollingBackend {
     }
 
     private var activeTab: TabRef?
+    /// Restricts playback detection to these browsers; nil allows every supported browser.
+    var allowed: Set<Browser>? {
+        didSet { if allowed != oldValue { refresh() } }
+    }
     private static let maxProbesPerPoll = 10
 
     private static let mediaHosts = [
@@ -76,7 +80,7 @@ final class BrowserBackend: PollingBackend {
     // MARK: Polling
 
     override func poll() async {
-        let running = Browser.allCases.filter(\.isRunning)
+        let running = Browser.allCases.filter { $0.isRunning && (allowed?.contains($0) ?? true) }
         guard !running.isEmpty else {
             activeTab = nil
             publish(nil)
