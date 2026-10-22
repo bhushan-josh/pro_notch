@@ -1,11 +1,18 @@
 #!/bin/bash
-# Creates a self-signed "Dynamic Notch Local" code-signing identity in the login keychain.
-# Signing every build with the same identity keeps macOS privacy grants across rebuilds.
+# Creates a self-signed "Dynamic Notch Local" code-signing identity in a project-local keychain.
+# A dedicated keychain with a known password lets codesign use the key without prompting, and keeps
+# the login keychain untouched. Signing every build with the same identity keeps macOS privacy grants.
 set -euo pipefail
 
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 NAME="Dynamic Notch Local"
-if security find-certificate -c "$NAME" >/dev/null 2>&1; then
-  echo "\"$NAME\" already exists."
+KEYCHAIN="$ROOT/.signing/dynamic-notch.keychain-db"
+# Not a secret: it only guards a throwaway self-signed key used for local builds.
+KEYCHAIN_PASSWORD="dynamic-notch-local"
+
+mkdir -p "$ROOT/.signing"
+if [[ -f "$KEYCHAIN" ]] && security find-certificate -c "$NAME" "$KEYCHAIN" >/dev/null 2>&1; then
+  echo "\"$NAME\" already exists in $KEYCHAIN."
   exit 0
 fi
 
@@ -27,12 +34,16 @@ EOF
 
 openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
   -keyout "$WORK/key.pem" -out "$WORK/cert.pem" -config "$WORK/cert.conf" >/dev/null 2>&1
-PASS="dynamic-notch"
+P12_PASS="dynamic-notch"
 openssl pkcs12 -export -legacy -inkey "$WORK/key.pem" -in "$WORK/cert.pem" \
-  -name "$NAME" -out "$WORK/identity.p12" -passout "pass:$PASS" >/dev/null 2>&1 \
+  -name "$NAME" -out "$WORK/identity.p12" -passout "pass:$P12_PASS" >/dev/null 2>&1 \
   || openssl pkcs12 -export -inkey "$WORK/key.pem" -in "$WORK/cert.pem" \
-       -name "$NAME" -out "$WORK/identity.p12" -passout "pass:$PASS" >/dev/null 2>&1
+       -name "$NAME" -out "$WORK/identity.p12" -passout "pass:$P12_PASS" >/dev/null 2>&1
 
-security import "$WORK/identity.p12" -k "$HOME/Library/Keychains/login.keychain-db" \
-  -P "$PASS" -T /usr/bin/codesign >/dev/null
-echo "Created \"$NAME\" in the login keychain."
+rm -f "$KEYCHAIN"
+security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+security set-keychain-settings "$KEYCHAIN"
+security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+security import "$WORK/identity.p12" -k "$KEYCHAIN" -P "$P12_PASS" -T /usr/bin/codesign >/dev/null
+security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
+echo "Created \"$NAME\" in $KEYCHAIN."

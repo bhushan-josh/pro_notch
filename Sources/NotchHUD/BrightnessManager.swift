@@ -21,7 +21,6 @@ public final class BrightnessManager {
     private struct Functions {
         var get: GetFunction
         var set: SetFunction
-        var setSmooth: SetFunction?
         var canChange: CanChangeFunction?
         var register: RegisterFunction?
         var unregister: UnregisterFunction?
@@ -34,6 +33,7 @@ public final class BrightnessManager {
     @ObservationIgnored private var lastUserIntent = Date.distantPast
     @ObservationIgnored private var samples: [(time: Date, value: Double)] = []
     @ObservationIgnored private var screenObserver: NSObjectProtocol?
+    @ObservationIgnored private var rampTask: Task<Void, Never>?
 
     @ObservationIgnored fileprivate static weak var active: BrightnessManager?
 
@@ -63,16 +63,36 @@ public final class BrightnessManager {
         lastUserIntent = Date()
     }
 
+    /// DisplayServicesSetBrightnessSmooth reports success but leaves the panel unchanged on macOS 27,
+    /// so the ramp is done here with the plain setter.
     public func setBrightness(_ value: Double, smooth: Bool = true) {
         guard let functions, isAvailable else { return }
-        let value = min(max(value, 0), 1)
-        let setter = smooth ? (functions.setSmooth ?? functions.set) : functions.set
-        let status = setter(displayID, Float(value))
-        hudLog.notice("brightness set \(value, privacy: .public) display=\(self.displayID, privacy: .public) status=\(status, privacy: .public)")
-        guard status == 0 else { return }
-        brightness = value
-        // The smooth ramp emits intermediate notifications; holding them off keeps the bar from stepping back.
-        ownChangeUntil = Date().addingTimeInterval(smooth ? 0.7 : 0.2)
+        let target = min(max(value, 0), 1)
+        let start = read() ?? brightness
+        brightness = target
+        rampTask?.cancel()
+        ownChangeUntil = Date().addingTimeInterval(smooth ? 0.5 : 0.2)
+        guard smooth, abs(target - start) > 0.001 else {
+            apply(target, with: functions)
+            return
+        }
+        let steps = 6
+        rampTask = Task { [weak self] in
+            for step in 1...steps {
+                guard let self, !Task.isCancelled else { return }
+                let progress = Double(step) / Double(steps)
+                let eased = 1 - pow(1 - progress, 2)
+                self.apply(start + (target - start) * eased, with: functions)
+                if step < steps { try? await Task.sleep(for: .milliseconds(16)) }
+            }
+        }
+    }
+
+    private func apply(_ value: Double, with functions: Functions) {
+        let status = functions.set(displayID, Float(value))
+        if status != 0 {
+            hudLog.error("brightness set failed \(value, privacy: .public) status=\(status, privacy: .public)")
+        }
     }
 
     func read() -> Double? {
@@ -147,7 +167,6 @@ public final class BrightnessManager {
         return Functions(
             get: get,
             set: set,
-            setSmooth: symbol("DisplayServicesSetBrightnessSmooth", as: SetFunction.self),
             canChange: symbol("DisplayServicesCanChangeBrightness", as: CanChangeFunction.self),
             register: symbol("DisplayServicesRegisterForBrightnessChangeNotifications", as: RegisterFunction.self),
             unregister: symbol("DisplayServicesUnregisterForBrightnessChangeNotifications", as: UnregisterFunction.self)

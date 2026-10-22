@@ -15,10 +15,14 @@ for arg in "$@"; do
 done
 
 # A stable identity keeps macOS privacy grants (Accessibility, Automation) across rebuilds.
-# scripts/create-signing-identity.sh creates "Dynamic Notch Local"; ad-hoc ("-") is the fallback.
+# scripts/create-signing-identity.sh creates "Dynamic Notch Local" in a project keychain; ad-hoc ("-") is the fallback.
 IDENTITY="${NOTCH_SIGN_IDENTITY:-}"
-if [[ -z "$IDENTITY" ]] && security find-certificate -c "Dynamic Notch Local" >/dev/null 2>&1; then
+KEYCHAIN_ARGS=()
+SIGNING_KEYCHAIN="$ROOT/.signing/dynamic-notch.keychain-db"
+if [[ -z "$IDENTITY" && -f "$SIGNING_KEYCHAIN" ]]; then
+  security unlock-keychain -p "dynamic-notch-local" "$SIGNING_KEYCHAIN"
   IDENTITY="Dynamic Notch Local"
+  KEYCHAIN_ARGS=(--keychain "$SIGNING_KEYCHAIN")
 fi
 IDENTITY="${IDENTITY:--}"
 
@@ -36,7 +40,7 @@ if [[ -f "$ROOT/Support/AppIcon.icns" ]]; then
 fi
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 
-codesign --force --sign "$IDENTITY" --entitlements "$ROOT/Support/DynamicNotch.entitlements" "$APP"
+codesign --force --sign "$IDENTITY" ${KEYCHAIN_ARGS[@]+"${KEYCHAIN_ARGS[@]}"} --entitlements "$ROOT/Support/DynamicNotch.entitlements" "$APP"
 echo "Built $APP (signed with: $IDENTITY)"
 
 case "$ACTION" in
