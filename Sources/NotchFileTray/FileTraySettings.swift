@@ -50,7 +50,7 @@ struct FileTraySettingsView: View {
                         ForEach(FileTrayStorageMode.allCases, id: \.self) { Text($0.title).tag($0) }
                     }
                     Text(storage.info).font(.caption).foregroundStyle(.secondary)
-                    SettingsToggle("Keep Tray Between Launches", info: "Restore the tray contents when Notch starts.", isOn: $persist)
+                    SettingsToggle("Keep Tray Between Launches", info: "Restore the tray contents when Dynamic Notch starts.", isOn: $persist)
                     SettingsSlider(
                         "Maximum Items",
                         value: Binding(get: { Double(maxItems) }, set: { maxItems = Int($0.rounded()) }),

@@ -16,7 +16,7 @@ final class SettingsWindowController {
                 backing: .buffered,
                 defer: false
             )
-            window.title = "Notch Settings"
+            window.title = "Dynamic Notch Settings"
             window.titlebarAppearsTransparent = true
             window.toolbarStyle = .unified
             window.isReleasedWhenClosed = false

@@ -22,21 +22,21 @@ final class StatusItemController: NSObject {
         }
         guard item == nil else { return }
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        item.button?.image = NSImage(systemSymbolName: "capsule.portrait.tophalf.filled", accessibilityDescription: "Notch")
-            ?? NSImage(systemSymbolName: "rectangle.topthird.inset.filled", accessibilityDescription: "Notch")
+        item.button?.image = NSImage(systemSymbolName: "capsule.portrait.tophalf.filled", accessibilityDescription: "Dynamic Notch")
+            ?? NSImage(systemSymbolName: "rectangle.topthird.inset.filled", accessibilityDescription: "Dynamic Notch")
         item.menu = makeMenu()
         self.item = item
     }
 
     private func makeMenu() -> NSMenu {
         let menu = NSMenu()
-        menu.addItem(withTitle: "Open Notch", action: #selector(openNotch), keyEquivalent: "").target = self
+        menu.addItem(withTitle: "Open Dynamic Notch", action: #selector(openNotch), keyEquivalent: "").target = self
         menu.addItem(.separator())
         menu.addItem(withTitle: "Settings…", action: #selector(settings), keyEquivalent: ",").target = self
         menu.addItem(withTitle: "Reset Onboarding", action: #selector(resetOnboarding), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Reset Permissions…", action: #selector(resetPermissions), keyEquivalent: "").target = self
         menu.addItem(.separator())
-        menu.addItem(withTitle: "Quit Notch", action: #selector(quit), keyEquivalent: "q").target = self
+        menu.addItem(withTitle: "Quit Dynamic Notch", action: #selector(quit), keyEquivalent: "q").target = self
         return menu
     }
 

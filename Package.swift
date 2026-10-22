@@ -6,10 +6,10 @@ let swiftSettings: [SwiftSetting] = [
 ]
 
 let package = Package(
-    name: "Notch",
+    name: "DynamicNotch",
     platforms: [.macOS(.v15)],
     products: [
-        .executable(name: "Notch", targets: ["Notch"]),
+        .executable(name: "DynamicNotch", targets: ["DynamicNotch"]),
     ],
     targets: [
         .target(name: "NotchCore", swiftSettings: swiftSettings),
@@ -23,7 +23,7 @@ let package = Package(
         .target(name: "NotchFileTray", dependencies: ["NotchCore"], swiftSettings: swiftSettings),
 
         .executableTarget(
-            name: "Notch",
+            name: "DynamicNotch",
             dependencies: [
                 "NotchCore", "NotchMedia", "NotchHUD", "NotchSystem",
                 "NotchLock", "NotchCalendar", "NotchFileTray",

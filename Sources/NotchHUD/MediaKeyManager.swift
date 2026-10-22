@@ -124,7 +124,7 @@ final class MediaKeyManager {
     static let permission = PermissionRequirement(
         id: "accessibility",
         title: "Accessibility",
-        description: "Lets Notch intercept the volume and brightness keys and replace the system HUD.",
+        description: "Lets Dynamic Notch intercept the volume and brightness keys and replace the system HUD.",
         symbol: "accessibility",
         settingsURL: URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"),
         status: {

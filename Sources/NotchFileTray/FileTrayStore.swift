@@ -15,7 +15,7 @@ public final class FileTrayStore {
     @ObservationIgnored var onAdd: ((Int) -> Void)?
     @ObservationIgnored private var thumbnailRequests: Set<UUID> = []
 
-    static let supportFolder = URL.applicationSupportDirectory.appendingPathComponent("Notch", isDirectory: true)
+    static let supportFolder = URL.applicationSupportDirectory.appendingPathComponent("Dynamic Notch", isDirectory: true)
     static let trayFolder = supportFolder.appendingPathComponent("FileTray", isDirectory: true)
     private static let indexURL = supportFolder.appendingPathComponent("FileTray.json")
 

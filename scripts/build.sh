@@ -1,5 +1,5 @@
 #!/bin/bash
-# Builds Notch.app into ./build. Usage: scripts/build.sh [--run | --install] [--debug]
+# Builds "Dynamic Notch.app" into ./build. Usage: scripts/build.sh [--run | --install] [--debug]
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -14,36 +14,41 @@ for arg in "$@"; do
   esac
 done
 
-# Set NOTCH_SIGN_IDENTITY to a stable code-signing identity to keep privacy grants across rebuilds.
-IDENTITY="${NOTCH_SIGN_IDENTITY:--}"
+# A stable identity keeps macOS privacy grants (Accessibility, Automation) across rebuilds.
+# scripts/create-signing-identity.sh creates "Dynamic Notch Local"; ad-hoc ("-") is the fallback.
+IDENTITY="${NOTCH_SIGN_IDENTITY:-}"
+if [[ -z "$IDENTITY" ]] && security find-certificate -c "Dynamic Notch Local" >/dev/null 2>&1; then
+  IDENTITY="Dynamic Notch Local"
+fi
+IDENTITY="${IDENTITY:--}"
 
 cd "$ROOT"
-swift build -c "$CONFIG" --product Notch
+swift build -c "$CONFIG" --product DynamicNotch
 BIN="$(swift build -c "$CONFIG" --show-bin-path)"
 
-APP="$ROOT/build/Notch.app"
+APP="$ROOT/build/Dynamic Notch.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$BIN/Notch" "$APP/Contents/MacOS/Notch"
+cp "$BIN/DynamicNotch" "$APP/Contents/MacOS/DynamicNotch"
 cp "$ROOT/Support/Info.plist" "$APP/Contents/Info.plist"
 if [[ -f "$ROOT/Support/AppIcon.icns" ]]; then
   cp "$ROOT/Support/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
 fi
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 
-codesign --force --sign "$IDENTITY" --entitlements "$ROOT/Support/Notch.entitlements" "$APP"
-echo "Built $APP"
+codesign --force --sign "$IDENTITY" --entitlements "$ROOT/Support/DynamicNotch.entitlements" "$APP"
+echo "Built $APP (signed with: $IDENTITY)"
 
 case "$ACTION" in
   run)
-    pkill -x Notch 2>/dev/null || true
+    pkill -x DynamicNotch 2>/dev/null || true
     open "$APP"
     ;;
   install)
-    pkill -x Notch 2>/dev/null || true
-    rm -rf /Applications/Notch.app
-    ditto "$APP" /Applications/Notch.app
-    open /Applications/Notch.app
-    echo "Installed /Applications/Notch.app"
+    pkill -x DynamicNotch 2>/dev/null || true
+    rm -rf "/Applications/Dynamic Notch.app"
+    ditto "$APP" "/Applications/Dynamic Notch.app"
+    open "/Applications/Dynamic Notch.app"
+    echo "Installed /Applications/Dynamic Notch.app"
     ;;
 esac

@@ -56,7 +56,7 @@ final class LiveWaveform {
         do {
             try capture.start()
         } catch {
-            NSLog("Notch live waveform unavailable: \(error)")
+            NSLog("Dynamic Notch live waveform unavailable: \(error)")
             failedAt = Date()
             return
         }
@@ -127,7 +127,7 @@ final class AudioTapCapture: @unchecked Sendable {
     func start() throws {
         let description = CATapDescription(stereoGlobalTapButExcludeProcesses: [])
         description.uuid = UUID()
-        description.name = "Notch Waveform"
+        description.name = "Dynamic Notch Waveform"
         description.isPrivate = true
         description.muteBehavior = .unmuted
 
@@ -148,7 +148,7 @@ final class AudioTapCapture: @unchecked Sendable {
 
             let outputUID = try Self.defaultOutputUID()
             let aggregate: [String: Any] = [
-                kAudioAggregateDeviceNameKey: "Notch Waveform",
+                kAudioAggregateDeviceNameKey: "Dynamic Notch Waveform",
                 kAudioAggregateDeviceUIDKey: UUID().uuidString,
                 kAudioAggregateDeviceMainSubDeviceKey: outputUID,
                 kAudioAggregateDeviceIsPrivateKey: true,
