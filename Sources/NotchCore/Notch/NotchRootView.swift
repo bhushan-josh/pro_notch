@@ -214,6 +214,7 @@ private struct PageTabButton: View {
 
 struct HomePageView: View {
     @AppStorage(CoreSettings.expandedHome) private var home
+    @State private var narrowIndex = 0
     private let registry = NotchRegistry.shared
 
     var body: some View {
@@ -227,16 +228,48 @@ struct HomePageView: View {
         if widgets.isEmpty {
             EmptyHomeView()
         } else {
-            HStack(spacing: 18) {
-                ForEach(Array(widgets.enumerated()), id: \.element.id) { index, widget in
-                    if index > 0 {
-                        Rectangle().fill(.white.opacity(0.1)).frame(width: 1).padding(.vertical, 8)
-                    }
-                    widget.content()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+            GeometryReader { proxy in
+                if widgets.count > 1, proxy.size.width < NotchLayout.duoMinimumWidth {
+                    single(widgets)
+                } else {
+                    sideBySide(widgets)
                 }
             }
         }
+    }
+
+    private func sideBySide(_ widgets: [HomeWidget]) -> some View {
+        HStack(spacing: 18) {
+            ForEach(Array(widgets.enumerated()), id: \.element.id) { index, widget in
+                if index > 0 {
+                    Rectangle().fill(.white.opacity(0.1)).frame(width: 1).padding(.vertical, 8)
+                }
+                widget.content()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+    }
+
+    /// Too narrow for Duo: one card at a time, with dots to switch.
+    private func single(_ widgets: [HomeWidget]) -> some View {
+        let index = min(narrowIndex, widgets.count - 1)
+        return widgets[index].content()
+            .id(widgets[index].id)
+            .transition(.opacity.combined(with: .blurReplace))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .overlay(alignment: .topTrailing) {
+                HStack(spacing: 5) {
+                    ForEach(widgets.indices, id: \.self) { dot in
+                        Circle()
+                            .fill(.white.opacity(dot == index ? 0.8 : 0.25))
+                            .frame(width: 5, height: 5)
+                            .padding(3)
+                            .contentShape(Circle())
+                            .onTapGesture { withAnimation(.notchSnappy) { narrowIndex = dot } }
+                    }
+                }
+                .offset(y: -14)
+            }
     }
 }
 

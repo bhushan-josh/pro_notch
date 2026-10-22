@@ -38,7 +38,7 @@ public struct NotchGeometry: Equatable, Sendable {
 }
 
 public enum NotchLayout {
-    public static let expandedWidth: CGFloat = 576
+    public static let expandedWidth: CGFloat = 404
     public static let expandedContentHeight: CGFloat = 158
     /// Inset between the island edge and wing content.
     public static let wingPadding: CGFloat = 9
@@ -76,7 +76,7 @@ public enum NotchLayout {
 
     public static func openSize(geometry: NotchGeometry) -> CGSize {
         CGSize(
-            width: max(expandedWidth, geometry.notchSize.width + 340),
+            width: max(expandedWidth, geometry.notchSize.width + 200),
             height: geometry.notchSize.height + expandedContentHeight
         )
     }
@@ -91,6 +91,9 @@ public enum NotchLayout {
 
     /// Largest open island any page may be resized to.
     public static let maxResizableSize = CGSize(width: 960, height: 520)
+
+    /// Below this content width the Home page shows one card at a time instead of side by side.
+    public static let duoMinimumWidth: CGFloat = 520
 
     /// Window size large enough for every state, the hover scale and the shadow.
     public static func windowSize(geometry: NotchGeometry) -> CGSize {

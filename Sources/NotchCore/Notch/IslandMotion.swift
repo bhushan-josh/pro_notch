@@ -57,13 +57,13 @@ public extension AnyTransition {
         )
     }
 
-    /// Expanded content settling in from a blur as the island opens.
+    /// Expanded content settling in from a blur once the island has mostly opened, so the text never runs ahead of the shape.
     static var islandExpanded: AnyTransition {
         .asymmetric(
             insertion: .modifier(
-                active: IslandBlurEffect(opacity: 0, blur: 12, scaleX: 0.9, scaleY: 0.82, anchor: .top),
+                active: IslandBlurEffect(opacity: 0, blur: 10, scaleX: 0.96, scaleY: 0.94, anchor: .top),
                 identity: IslandBlurEffect(opacity: 1, blur: 0, scaleX: 1, anchor: .top)
-            ).animation(.islandOpen.delay(0.04)),
+            ).animation(.easeOut(duration: 0.26).delay(0.17)),
             removal: .modifier(
                 active: IslandBlurEffect(opacity: 0, blur: 8, scaleX: 0.92, scaleY: 0.85, anchor: .top),
                 identity: IslandBlurEffect(opacity: 1, blur: 0, scaleX: 1, anchor: .top)
