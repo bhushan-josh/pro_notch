@@ -23,24 +23,26 @@ struct NotchRootView: View {
         let scale = open ? 1 : (model.isPressed ? NotchLayout.pressScale : (hovering ? NotchLayout.hoverScale : 1))
 
         VStack(spacing: 0) {
+            // The clip sits on the animated frame, not on the content: inserted content is laid out at its
+            // final size at once, so only a frame-level clip reveals it in step with the growing panel.
             ZStack(alignment: .top) {
+                if open {
+                    ExpandedNotchView().transition(.islandExpanded)
+                } else {
+                    ClosedActivityView(activity: activity, notchSize: model.geometry.notchSize)
+                }
+            }
+            .padding(.horizontal, top)
+            .frame(width: size.width + top * 2, height: size.height, alignment: .top)
+            .clipShape(shape)
+            .background {
                 shape
                     .fill(.black)
                     .shadow(color: .black.opacity(open ? 0.4 : (hovering ? 0.25 : 0)), radius: open ? 18 : 8, y: open ? 8 : 2)
-                if contrastOutline {
-                    shape.stroke(.white.opacity(0.14), lineWidth: 1)
-                }
-                Group {
-                    if open {
-                        ExpandedNotchView().transition(.islandExpanded)
-                    } else {
-                        ClosedActivityView(activity: activity, notchSize: model.geometry.notchSize)
-                    }
-                }
-                .padding(.horizontal, top)
-                .clipShape(shape)
             }
-            .frame(width: size.width + top * 2, height: size.height)
+            .overlay {
+                if contrastOutline { shape.stroke(.white.opacity(0.14), lineWidth: 1) }
+            }
             .scaleEffect(scale, anchor: .top)
             .contentShape(shape)
             .onGeometryChange(for: CGRect.self, of: { $0.frame(in: .global) }) { model.shapeFrame = $0 }
