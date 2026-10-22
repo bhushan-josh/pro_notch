@@ -5,25 +5,26 @@ import SwiftUI
 @MainActor
 enum MediaActivities {
     static let idleID = "media.nowPlaying"
-    static let peekID = "media.peek"
+    /// Same id as the idle activity so the wings stay put and only the strip below animates in.
+    static let peekID = idleID
 
-    static func wings(id: String, priority: ActivityPriority, duration: TimeInterval?) -> LiveActivity {
+    static func wings(id: String, priority: ActivityPriority, duration: TimeInterval?, peeking: Bool = false) -> LiveActivity {
         LiveActivity(
             id: id,
             category: .media,
             priority: priority,
             duration: duration,
-            leadingWidth: 24,
-            trailingWidth: 24,
-            leading: { CompactArtworkWing() },
+            leadingWidth: 22,
+            trailingWidth: 22,
+            leading: { CompactArtworkWing(isPeeking: peeking) },
             trailing: { CompactTrailingWing() }
         )
     }
 
     static func presentPeek() {
         let duration = max(1, Defaults[MediaSettings.peekDuration])
-        let activity = wings(id: peekID, priority: .low, duration: duration)
-            .withBottom(height: 34) { PeekBottom() }
+        let activity = wings(id: peekID, priority: .low, duration: duration, peeking: true)
+            .withBottom(height: 32) { PeekBottom() }
         ActivityCenter.shared.present(activity)
     }
 }

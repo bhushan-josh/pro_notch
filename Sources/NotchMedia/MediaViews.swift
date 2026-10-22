@@ -76,71 +76,11 @@ struct FlippingArtwork: View {
     }
 }
 
-// MARK: Closed notch wings
-
-struct CompactArtworkWing: View {
-    private let manager = MediaManager.shared
-    @AppStorage(MediaSettings.disableArtworkFlip) private var disableFlip
-
-    var body: some View {
-        FlippingArtwork(
-            image: manager.artwork,
-            trackKey: manager.track?.identity ?? "",
-            size: 22,
-            cornerRadius: 6,
-            flips: !disableFlip
-        )
-    }
-}
-
-struct CompactTrailingWing: View {
-    private let manager = MediaManager.shared
-    private let status = SystemStatus.shared
-    @AppStorage(MediaSettings.disableCompactWaveform) private var disableWaveform
-    @AppStorage(MediaSettings.replaceWaveformDuringFocus) private var replaceDuringFocus
-    @AppStorage(MediaSettings.colorStyle) private var colorStyle
-
-    var body: some View {
-        if replaceDuringFocus, let focus = status.focus {
-            Image(systemName: focus.symbol)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(focus.color)
-                .transition(.scale.combined(with: .opacity))
-        } else if !disableWaveform {
-            WaveformView(
-                isPlaying: manager.isPlaying,
-                style: MediaTint.shape(colorStyle, artwork: manager.artworkColor),
-                barCount: 5,
-                barWidth: 2.6,
-                spacing: 1.8,
-                maxHeight: 13
-            )
-        }
-    }
-}
-
-struct PeekBottom: View {
-    private let manager = MediaManager.shared
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 1) {
-            MarqueeText(manager.title, font: .system(size: 12, weight: .semibold))
-            if !manager.artist.isEmpty {
-                Text(manager.artist)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.55))
-                    .lineLimit(1)
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-        .padding(.bottom, 4)
-    }
-}
-
 // MARK: Progress
 
 struct MediaProgressSlider: View {
     var tint: AnyShapeStyle
+    var timeColor: Color = .white.opacity(0.5)
     var showsTimes = true
     var barHeight: CGFloat = 5
 
@@ -155,18 +95,17 @@ struct MediaProgressSlider: View {
         TimelineView(.animation(minimumInterval: 0.25, paused: !(track?.isPlaying ?? false) || dragFraction != nil)) { context in
             let elapsed = dragFraction.map { $0 * duration } ?? (track?.elapsed(at: context.date) ?? 0)
             let fraction = duration > 0 ? elapsed / duration : 0
-            VStack(spacing: 3) {
+            HStack(spacing: 8) {
+                if showsTimes {
+                    Text(duration > 0 ? Self.format(elapsed) : "-:--").frame(minWidth: 26, alignment: .leading)
+                }
                 bar(fraction: fraction, enabled: canSeek, duration: duration)
                 if showsTimes {
-                    HStack {
-                        Text(Self.format(elapsed))
-                        Spacer()
-                        Text(duration > 0 ? "-" + Self.format(max(0, duration - elapsed)) : "Live")
-                    }
-                    .font(.system(size: 10, weight: .medium).monospacedDigit())
-                    .foregroundStyle(.white.opacity(0.5))
+                    Text(duration > 0 ? "-" + Self.format(max(0, duration - elapsed)) : "Live").frame(minWidth: 26, alignment: .trailing)
                 }
             }
+            .font(.system(size: 10, weight: .bold).monospacedDigit())
+            .foregroundStyle(timeColor)
         }
     }
 
@@ -175,7 +114,7 @@ struct MediaProgressSlider: View {
         let height = active ? barHeight + 3 : barHeight
         return GeometryReader { proxy in
             ZStack(alignment: .leading) {
-                Capsule().fill(.white.opacity(0.18))
+                Capsule().fill(.white.opacity(0.2))
                 Capsule()
                     .fill(tint)
                     .frame(width: max(height, proxy.size.width * min(max(fraction, 0), 1)))
@@ -239,10 +178,10 @@ struct MediaButton: View {
             Image(systemName: symbol)
                 .font(.system(size: size, weight: .semibold))
                 .contentTransition(.symbolEffect(.replace))
-                .foregroundStyle(.white.opacity(isEnabled ? (isActive ? 1 : 0.5) : 0.25))
-                .frame(width: size * 2.1, height: size * 2.1)
-                .background(Circle().fill(.white.opacity(isHovering && isEnabled ? 0.12 : 0)))
-                .contentShape(Circle())
+                .foregroundStyle(.white.opacity(isEnabled ? (isActive ? 0.95 : 0.45) : 0.25))
+                .frame(width: 44, height: 40)
+                .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(.white.opacity(isHovering && isEnabled ? 0.1 : 0)))
+                .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
         .buttonStyle(PressScaleStyle())
         .disabled(!isEnabled)
@@ -296,13 +235,13 @@ struct TransportControls: View {
 
     var body: some View {
         HStack(spacing: 6 * scale) {
-            if left != .none { ExtraControlButton(control: left, size: 12 * scale) }
-            MediaButton(symbol: "backward.fill", size: 15 * scale, isEnabled: manager.hasMedia, help: "Previous") { manager.previous() }
-            MediaButton(symbol: manager.isPlaying ? "pause.fill" : "play.fill", size: 21 * scale, help: manager.isPlaying ? "Pause" : "Play") {
+            if left != .none { ExtraControlButton(control: left, size: 16 * scale) }
+            MediaButton(symbol: "backward.fill", size: 19 * scale, isEnabled: manager.hasMedia, help: "Previous") { manager.previous() }
+            MediaButton(symbol: manager.isPlaying ? "pause.fill" : "play.fill", size: 25 * scale, help: manager.isPlaying ? "Pause" : "Play") {
                 manager.togglePlayPause()
             }
-            MediaButton(symbol: "forward.fill", size: 15 * scale, isEnabled: manager.hasMedia && manager.supports(.skip), help: "Next") { manager.next() }
-            if right != .none { ExtraControlButton(control: right, size: 12 * scale) }
+            MediaButton(symbol: "forward.fill", size: 19 * scale, isEnabled: manager.hasMedia && manager.supports(.skip), help: "Next") { manager.next() }
+            if right != .none { ExtraControlButton(control: right, size: 16 * scale) }
         }
     }
 }
@@ -339,25 +278,30 @@ struct NowPlayingWidget: View {
 
     private var content: some View {
         let tint = MediaTint.shape(colorStyle, artwork: manager.artworkColor)
-        return VStack(spacing: 8) {
-            HStack(alignment: .center, spacing: 14) {
+        let secondary = (manager.artworkColor ?? .white).opacity(0.75)
+        return VStack(spacing: 0) {
+            HStack(alignment: .center, spacing: 0) {
                 artwork
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        MarqueeText(manager.title, font: .system(size: 14, weight: .semibold))
+                VStack(alignment: .leading, spacing: 1) {
+                    HStack(spacing: 5) {
+                        MarqueeText(manager.title, font: .system(size: 13.5, weight: .semibold))
                         if manager.track?.isExplicit == true { ExplicitBadge() }
-                        WaveformView(isPlaying: manager.isPlaying, style: tint, barCount: 4, barWidth: 2.5, spacing: 1.8, maxHeight: 12)
                     }
                     Text(manager.artist.isEmpty ? manager.album : manager.artist)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.55))
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(secondary)
                         .lineLimit(1)
-                    Spacer(minLength: 6)
-                    MediaProgressSlider(tint: tint)
                 }
+                .padding(.leading, 14)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .frame(height: 84)
+                IslandWaveform(isPlaying: manager.isPlaying, fill: tint)
+                    .frame(width: 20)
+                    .padding(.leading, 8)
+                    .padding(.trailing, 4)
             }
+            MediaProgressSlider(tint: tint, timeColor: secondary, barHeight: 6)
+                .padding(.top, 14)
+            Spacer(minLength: 2)
             TransportControls(left: leftControl, right: rightControl)
                 .frame(maxWidth: .infinity)
         }
@@ -369,17 +313,19 @@ struct NowPlayingWidget: View {
             FlippingArtwork(
                 image: manager.artwork,
                 trackKey: manager.track?.identity ?? "",
-                size: 84,
-                cornerRadius: 14,
+                size: 56,
+                cornerRadius: 12,
                 flips: !disableFlip
             )
-            .shadow(color: (manager.artworkColor ?? .clear).opacity(0.35), radius: 14, y: 4)
+            .opacity(0.95)
+            .scaleEffect(manager.isPlaying ? 1 : 0.92)
+            .animation(.easeInOut(duration: 0.5), value: manager.isPlaying)
             if let icon = manager.appIcon {
                 Image(nsImage: icon)
                     .resizable()
-                    .frame(width: 26, height: 26)
-                    .shadow(color: .black.opacity(0.5), radius: 3, y: 1)
-                    .offset(x: 7, y: 7)
+                    .frame(width: 20, height: 20)
+                    .shadow(color: .black.opacity(0.5), radius: 2, y: 1)
+                    .offset(x: 5, y: 5)
             }
         }
         .contentShape(Rectangle())

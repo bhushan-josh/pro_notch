@@ -38,17 +38,27 @@ public struct NotchGeometry: Equatable, Sendable {
 }
 
 public enum NotchLayout {
-    public static let expandedWidth: CGFloat = 640
-    public static let expandedContentHeight: CGFloat = 178
-    public static let wingPadding: CGFloat = 10
-    public static let horizontalContentPadding: CGFloat = 20
+    public static let expandedWidth: CGFloat = 576
+    public static let expandedContentHeight: CGFloat = 158
+    /// Inset between the island edge and wing content.
+    public static let wingPadding: CGFloat = 9
+    /// Gap kept clear on each side of the camera.
+    public static let cameraGap: CGFloat = 4
+    public static let horizontalContentPadding: CGFloat = 18
+    public static let hoverScale: CGFloat = 1.075
+    public static let pressScale: CGFloat = 0.94
 
-    public static func topRadius(open: Bool) -> CGFloat { open ? 14 : 6 }
+    public static func topRadius(open: Bool) -> CGFloat { open ? 12 : 6 }
 
-    public static func bottomRadius(open: Bool, geometry: NotchGeometry, activity: LiveActivity?) -> CGFloat {
-        if open { return 26 }
-        if let activity, activity.bottomHeight > 0 { return 18 }
-        return min(geometry.notchSize.height * 0.4, 12)
+    public static func bottomRadius(open: Bool, hovering: Bool, activity: LiveActivity?) -> CGFloat {
+        if open { return 24 }
+        if let activity, activity.bottomHeight > 0 { return 19 }
+        return hovering ? 13 : 12
+    }
+
+    /// Wings are always symmetric so the camera stays centered between them.
+    public static func wingWidth(_ activity: LiveActivity) -> CGFloat {
+        max(activity.leadingWidth, activity.trailingWidth)
     }
 
     /// Body size excluding the top flares the shape adds on each side.
@@ -59,19 +69,19 @@ public enum NotchLayout {
             return visible ? notch : CGSize(width: notch.width * 0.6, height: 0)
         }
         return CGSize(
-            width: notch.width + activity.leadingWidth + activity.trailingWidth + wingPadding * 4,
+            width: notch.width + (wingWidth(activity) + wingPadding + cameraGap) * 2,
             height: notch.height + activity.bottomHeight
         )
     }
 
     public static func openSize(geometry: NotchGeometry) -> CGSize {
         CGSize(
-            width: max(expandedWidth, geometry.notchSize.width + 360),
+            width: max(expandedWidth, geometry.notchSize.width + 340),
             height: geometry.notchSize.height + expandedContentHeight
         )
     }
 
-    /// Window size large enough for every state plus breathing room for the shadow.
+    /// Window size large enough for every state, the hover scale and the shadow.
     public static func windowSize(geometry: NotchGeometry) -> CGSize {
         let open = openSize(geometry: geometry)
         return CGSize(width: open.width + topRadius(open: true) * 2 + 120, height: open.height + 60)
@@ -85,6 +95,8 @@ public final class NotchModel {
     public internal(set) var geometry: NotchGeometry
     public internal(set) var isOpen = false
     public internal(set) var isHovering = false
+    /// Mouse button held on the closed island.
+    public internal(set) var isPressed = false
     public var selectedPageID = NotchModel.homePageID
     /// Files are being dragged over the notch.
     public internal(set) var isDropTargeted = false
@@ -104,14 +116,15 @@ public final class NotchModel {
     public func open(page: String? = nil) {
         if let page { selectedPageID = page }
         guard !isOpen else { return }
-        withAnimation(.notchSpring) { isOpen = true }
+        isOpen = true
+        isPressed = false
         Haptics.perform()
         onOpenChange?(true)
     }
 
     public func close() {
         guard isOpen else { return }
-        withAnimation(.notchSpring) { isOpen = false }
+        isOpen = false
         onOpenChange?(false)
     }
 

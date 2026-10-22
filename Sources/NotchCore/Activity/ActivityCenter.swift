@@ -84,6 +84,6 @@ public final class ActivityCenter {
 }
 
 public extension Animation {
-    static let notchSpring = Animation.spring(response: 0.42, dampingFraction: 0.8)
+    static let notchSpring = Animation.islandExpand
     static let notchSnappy = Animation.spring(response: 0.3, dampingFraction: 0.86)
 }

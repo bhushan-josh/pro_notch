@@ -14,6 +14,8 @@ public final class MediaManager {
     private(set) var capabilities: Set<MediaCapability> = []
     private(set) var artwork: NSImage?
     private(set) var artworkColor: Color?
+    /// Two colors sampled from the artwork's top and bottom halves.
+    private(set) var artworkGradient: [Color]?
     private(set) var appIcon: NSImage?
     /// Bumps on every meaningful change; feeds the idle provider's "most recent" ordering.
     private(set) var lastChangeAt = Date()
@@ -37,7 +39,7 @@ public final class MediaManager {
     @ObservationIgnored private var pauseTask: Task<Void, Never>?
     @ObservationIgnored private var artworkTask: Task<Void, Never>?
     @ObservationIgnored private var artworkKey: String?
-    @ObservationIgnored private var artworkCache: [String: (image: NSImage, color: Color?)] = [:]
+    @ObservationIgnored private var artworkCache: [String: (image: NSImage, color: Color?, gradient: [Color]?)] = [:]
     @ObservationIgnored private var iconCache: [String: NSImage] = [:]
     @ObservationIgnored private var lastIdentity: String?
     @ObservationIgnored private var lastPlaying = false
@@ -156,6 +158,7 @@ public final class MediaManager {
                 artworkKey = nil
                 artwork = nil
                 artworkColor = nil
+                artworkGradient = nil
             }
         } else if let new, let backend {
             loadArtwork(for: new, from: backend)
@@ -203,6 +206,7 @@ public final class MediaManager {
         if let cached = artworkCache[track.identity] {
             artwork = cached.image
             artworkColor = cached.color
+            artworkGradient = cached.gradient
             return
         }
         artworkTask?.cancel()
@@ -215,23 +219,26 @@ public final class MediaManager {
             }
             guard let self, !Task.isCancelled, self.artworkKey == key else { return }
             if image == nil, self.artworkCache[identity] != nil { return }
-            let color = image.flatMap(Self.color(of:))
+            let small = image.map(Self.thumbnail(of:))
+            let color = small.flatMap(ImageColors.dominantColor(of:))
+            let gradient = small.flatMap(ImageColors.gradientColors(of:))
             if let image {
                 if self.artworkCache.count > 40 { self.artworkCache.removeAll() }
-                self.artworkCache[identity] = (image, color)
+                self.artworkCache[identity] = (image, color, gradient)
             }
             self.artwork = image
             self.artworkColor = color
+            self.artworkGradient = gradient
         }
     }
 
-    private static func color(of image: NSImage) -> Color? {
+    private static func thumbnail(of image: NSImage) -> NSImage {
         let size = NSSize(width: 32, height: 32)
         let small = NSImage(size: size)
         small.lockFocus()
         image.draw(in: NSRect(origin: .zero, size: size), from: .zero, operation: .copy, fraction: 1)
         small.unlockFocus()
-        return ImageColors.dominantColor(of: small)
+        return small
     }
 
     private func updateAppIcon(bundleID: String?) {

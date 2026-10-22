@@ -1,5 +1,6 @@
 import AppKit
 import NotchCore
+import SwiftUI
 
 @MainActor
 public final class HUDFeature: NotchFeature {
@@ -12,6 +13,7 @@ public final class HUDFeature: NotchFeature {
     private let betterDisplay = BetterDisplayOSD()
     private var settingsObserver: AnyObject?
     private var pendingKeyboardRead: Task<Void, Never>?
+    private var lastAccessWarning: Date?
 
     private static let coarseStep = 1.0 / 16
     private static let fineStep = 1.0 / 64
@@ -27,7 +29,10 @@ public final class HUDFeature: NotchFeature {
 
         outputs.onDefaultDeviceChange = { [weak self] device in self?.outputChanged(device) }
         outputs.start()
-        volume.onExternalChange = { [weak self] in self?.showVolume() }
+        volume.onExternalChange = { [weak self] in
+            self?.warnIfSystemHUDLeaks()
+            self?.showVolume()
+        }
         volume.bind(to: outputs.defaultDeviceID)
 
         brightness.onExternalChange = { [weak self] value, userDriven in self?.brightnessChanged(value, userDriven: userDriven) }
@@ -54,6 +59,45 @@ public final class HUDFeature: NotchFeature {
         settingsObserver = nil
         pendingKeyboardRead?.cancel()
         presenter.dismissAll()
+    }
+
+    // MARK: Accessibility warning
+
+    /// Without Accessibility the key tap can't swallow events, so macOS draws its own HUD too. Say so in the notch.
+    private func warnIfSystemHUDLeaks() {
+        guard Defaults[HUDSettings.replaceSystemHUD], !mediaKeys.isInstalled else { return }
+        if let last = lastAccessWarning, Date().timeIntervalSince(last) < 60 { return }
+        lastAccessWarning = Date()
+        ActivityCenter.shared.present(LiveActivity(
+            id: "hud.accessibility",
+            category: .other,
+            priority: .high,
+            duration: 5,
+            leadingWidth: 22,
+            trailingWidth: 22,
+            leading: {
+                Image(systemName: "hand.raised.fill")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.orange)
+            },
+            trailing: {
+                Image(systemName: "arrow.up.forward.app.fill")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.7))
+            },
+            onTap: {
+                MediaKeyManager.requestTrust()
+                if let url = MediaKeyManager.permission.settingsURL { NSWorkspace.shared.open(url) }
+            }
+        ).withBottom(height: 32) {
+            Text("Allow Accessibility to replace the system HUD")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Color(white: 0.84).opacity(0.85))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                .padding(.bottom, 10)
+        })
     }
 
     // MARK: Media keys

@@ -63,39 +63,46 @@ struct LockScreenMediaView: View {
 
     var body: some View {
         let tint = MediaTint.shape(colorStyle, artwork: manager.artworkColor)
-        VStack(spacing: 12) {
-            HStack(spacing: 12) {
-                FlippingArtwork(image: manager.artwork, trackKey: manager.track?.identity ?? "", size: 54, cornerRadius: 10, flips: true)
-                VStack(alignment: .leading, spacing: 2) {
-                    MarqueeText(manager.title, font: .system(size: 14, weight: .semibold))
+        let secondary = (manager.artworkColor ?? .white).opacity(0.75)
+        VStack(spacing: 0) {
+            HStack(spacing: 0) {
+                FlippingArtwork(image: manager.artwork, trackKey: manager.track?.identity ?? "", size: 56, cornerRadius: 12, flips: true)
+                    .scaleEffect(0.95)
+                    .opacity(0.95)
+                VStack(alignment: .leading, spacing: 1) {
+                    MarqueeText(manager.title, font: .system(size: 13.5, weight: .semibold))
                     Text(manager.artist)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.65))
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(secondary)
                         .lineLimit(1)
                 }
+                .padding(.leading, 16)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                WaveformView(isPlaying: manager.isPlaying, style: tint, barCount: 5, barWidth: 3, spacing: 2, maxHeight: 16)
+                IslandWaveform(isPlaying: manager.isPlaying, fill: tint)
+                    .frame(width: 20)
+                    .padding(.trailing, 4)
             }
-            MediaProgressSlider(tint: tint, barHeight: 4)
-            TransportControls(scale: 1.05)
+            MediaProgressSlider(tint: tint, timeColor: secondary, barHeight: 6)
+                .padding(.top, 16)
+            TransportControls(left: .shuffle, right: .repeatMode)
+                .padding(.top, 6)
             if showVolume {
                 HStack(spacing: 10) {
                     Image(systemName: "speaker.fill")
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.6))
+                        .foregroundStyle(secondary)
                     VolumeBar(level: volume.level, tint: tint) { volume.set($0) }
                     Image(systemName: "speaker.wave.3.fill")
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.6))
+                        .foregroundStyle(secondary)
                 }
+                .padding(.top, 8)
                 .onAppear { volume.attach() }
                 .onDisappear { volume.detach() }
             }
         }
-        .foregroundStyle(.white)
-        .padding(16)
-        .frame(width: 340)
-        .background(Color.clear)
+        .foregroundStyle(Color(red: 1, green: 0.97, blue: 0.93))
+        .frame(minHeight: 140)
     }
 }
 

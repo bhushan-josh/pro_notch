@@ -12,7 +12,7 @@ final class LockGlyphState {
 @MainActor
 final class LockActivityController {
     static let activityID = "lock"
-    private static let unlockLinger: TimeInterval = 1.2
+    private static let unlockLinger: TimeInterval = 0.475
 
     private let state = LockGlyphState()
 
@@ -64,10 +64,11 @@ private struct LockGlyph: View {
 
     var body: some View {
         Image(systemName: state.isUnlocked ? "lock.open.fill" : "lock.fill")
-            .font(.system(size: 14, weight: .semibold))
+            .font(.system(size: 15, weight: .semibold))
             .foregroundStyle(.white)
             .contentTransition(.symbolEffect(.replace))
             .symbolEffect(.bounce, value: state.isUnlocked)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .padding(.leading, 1)
     }
 }

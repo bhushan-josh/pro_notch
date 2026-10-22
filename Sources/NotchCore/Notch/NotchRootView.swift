@@ -4,32 +4,43 @@ import UniformTypeIdentifiers
 struct NotchRootView: View {
     @Environment(NotchModel.self) private var model
     @AppStorage(CoreSettings.contrastOutline) private var contrastOutline
+    @State private var previousKind = IslandKind.idle
     private let center = ActivityCenter.shared
     private let registry = NotchRegistry.shared
 
     var body: some View {
-        let activity = model.isOpen ? nil : center.current
         let open = model.isOpen
-        let body = open
+        let activity = open ? nil : center.current
+        let kind = IslandKind(open: open, activity: activity)
+        let hovering = model.isHovering && !open
+        let size = open
             ? NotchLayout.openSize(geometry: model.geometry)
             : NotchLayout.closedSize(geometry: model.geometry, activity: activity)
         let top = NotchLayout.topRadius(open: open)
-        let bottom = NotchLayout.bottomRadius(open: open, geometry: model.geometry, activity: activity)
+        let bottom = NotchLayout.bottomRadius(open: open, hovering: hovering, activity: activity)
         let shape = NotchShape(topRadius: top, bottomRadius: bottom)
+        let scale = open ? 1 : (model.isPressed ? NotchLayout.pressScale : (hovering ? NotchLayout.hoverScale : 1))
 
         VStack(spacing: 0) {
             ZStack(alignment: .top) {
                 shape
                     .fill(.black)
-                    .shadow(color: .black.opacity(open ? 0.45 : 0), radius: open ? 16 : 0, y: 6)
+                    .shadow(color: .black.opacity(open ? 0.4 : (hovering ? 0.25 : 0)), radius: open ? 18 : 8, y: open ? 8 : 2)
                 if contrastOutline {
                     shape.stroke(.white.opacity(0.14), lineWidth: 1)
                 }
-                content(activity: activity)
-                    .padding(.horizontal, top)
-                    .clipShape(shape)
+                Group {
+                    if open {
+                        ExpandedNotchView().transition(.islandExpanded)
+                    } else {
+                        ClosedActivityView(activity: activity, notchSize: model.geometry.notchSize)
+                    }
+                }
+                .padding(.horizontal, top)
+                .clipShape(shape)
             }
-            .frame(width: body.width + top * 2, height: body.height)
+            .frame(width: size.width + top * 2, height: size.height)
+            .scaleEffect(scale, anchor: .top)
             .contentShape(shape)
             .onGeometryChange(for: CGRect.self, of: { $0.frame(in: .global) }) { model.shapeFrame = $0 }
             .onTapGesture { handleTap(activity: activity) }
@@ -41,25 +52,13 @@ struct NotchRootView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .opacity(model.isSuppressed ? 0 : 1)
-        .animation(.notchSpring, value: open)
-        .animation(.notchSpring, value: activity?.id)
-        .animation(.notchSpring, value: model.geometry)
+        .animation(IslandKind.animation(from: previousKind, to: kind), value: kind)
+        .animation(IslandKind.animation(from: previousKind, to: kind), value: activity?.id)
+        .animation(hovering ? .islandHover : .islandUnhover, value: hovering)
+        .animation(.islandPress, value: model.isPressed)
+        .animation(.islandExpand, value: model.geometry)
+        .onChange(of: kind) { _, new in previousKind = new }
         .ignoresSafeArea()
-    }
-
-    @ViewBuilder
-    private func content(activity: LiveActivity?) -> some View {
-        if model.isOpen {
-            ExpandedNotchView()
-                .transition(.asymmetric(
-                    insertion: .opacity.combined(with: .scale(scale: 0.92, anchor: .top)).animation(.notchSpring.delay(0.05)),
-                    removal: .opacity.animation(.easeOut(duration: 0.12))
-                ))
-        } else if let activity {
-            ClosedActivityView(activity: activity, notchSize: model.geometry.notchSize)
-                .id(activity.id)
-                .transition(.opacity.combined(with: .blurReplace))
-        }
     }
 
     private func handleTap(activity: LiveActivity?) {
@@ -79,26 +78,59 @@ struct NotchRootView: View {
     }
 }
 
+/// Which shape the island is in; each change between kinds uses its own spring.
+enum IslandKind: Equatable {
+    case idle, wings, peek, open
+
+    init(open: Bool, activity: LiveActivity?) {
+        if open { self = .open } else if let activity { self = activity.bottom == nil ? .wings : .peek } else { self = .idle }
+    }
+
+    static func animation(from old: IslandKind, to new: IslandKind) -> Animation {
+        switch (old, new) {
+        case (_, .open): .islandOpen
+        case (.open, _): .islandClose
+        case (_, .peek): .islandPeekOpen
+        case (.peek, _): .islandPeekClose
+        case (_, .idle): .islandCollapse
+        default: .islandExpand
+        }
+    }
+}
+
 struct ClosedActivityView: View {
-    let activity: LiveActivity
+    let activity: LiveActivity?
     let notchSize: CGSize
 
     var body: some View {
+        let wing = activity.map(NotchLayout.wingWidth) ?? 0
         VStack(spacing: 0) {
             HStack(spacing: 0) {
-                activity.leading
-                    .frame(width: activity.leadingWidth, height: notchSize.height)
-                    .padding(.leading, NotchLayout.wingPadding)
-                Spacer(minLength: notchSize.width + NotchLayout.wingPadding * 2)
-                activity.trailing
-                    .frame(width: activity.trailingWidth, height: notchSize.height)
-                    .padding(.trailing, NotchLayout.wingPadding)
+                ZStack {
+                    if let activity {
+                        activity.leading.id(activity.id).transition(.islandWing)
+                    }
+                }
+                .frame(width: wing, height: notchSize.height)
+                .padding(.leading, NotchLayout.wingPadding)
+                Spacer(minLength: notchSize.width + NotchLayout.cameraGap * 2)
+                ZStack {
+                    if let activity {
+                        activity.trailing.id(activity.id).transition(.islandWing)
+                    }
+                }
+                .frame(width: wing, height: notchSize.height)
+                .padding(.trailing, NotchLayout.wingPadding)
             }
             .frame(height: notchSize.height)
-            if let bottom = activity.bottom {
-                bottom
-                    .frame(height: activity.bottomHeight)
-                    .padding(.horizontal, NotchLayout.wingPadding + 4)
+            ZStack {
+                if let activity, let bottom = activity.bottom {
+                    bottom
+                        .id(activity.id)
+                        .frame(height: activity.bottomHeight)
+                        .padding(.horizontal, NotchLayout.wingPadding + 4)
+                        .transition(.islandPeek)
+                }
             }
         }
         .foregroundStyle(.white)

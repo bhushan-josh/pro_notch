@@ -179,12 +179,14 @@ final class NotchWindowController {
         switch type {
         case .leftMouseDown:
             dragChangeCount = NSPasteboard(name: .drag).changeCount
+            if !model.isOpen, interactiveRect.contains(location) { model.isPressed = true }
         case .leftMouseDragged:
             if !isFileDragActive, NotchRegistry.shared.dropHandler != nil,
                NSPasteboard(name: .drag).changeCount != dragChangeCount {
                 isFileDragActive = true
             }
         case .leftMouseUp:
+            model.isPressed = false
             if isFileDragActive {
                 isFileDragActive = false
                 model.isDropTargeted = false
