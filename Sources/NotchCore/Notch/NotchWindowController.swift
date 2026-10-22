@@ -169,6 +169,8 @@ final class NotchWindowController {
             height: notch.height
         )
         rect = rect.isEmpty ? notchRect : rect.union(notchRect)
+        // A pointer pinned to the top edge reports y == maxY, which NSRect.contains treats as outside.
+        rect.size.height += 2
         if isFileDragActive { rect = rect.insetBy(dx: -40, dy: -30) }
         return rect
     }
