@@ -107,7 +107,6 @@ public struct AudioOutputDevice: Identifiable, Hashable, Sendable {
     public let id: AudioObjectID
     public let uid: String
     public let name: String
-    public let transportType: UInt32
     public let kind: AudioOutputKind
 
     public var isBuiltInSpeakers: Bool { kind == .builtInSpeakers }
@@ -260,7 +259,7 @@ public final class OutputDevices {
             id, AudioProperty.address(kAudioDevicePropertyDataSource, kAudioObjectPropertyScopeOutput), initial: UInt32(0)
         )
         return AudioOutputDevice(
-            id: id, uid: uid, name: name, transportType: transport,
+            id: id, uid: uid, name: name,
             kind: kind(name: name, transport: transport, dataSource: dataSource)
         )
     }

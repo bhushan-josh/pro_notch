@@ -18,7 +18,7 @@ enum RepeatMode: String, Sendable {
 }
 
 enum MediaCommand: Sendable {
-    case togglePlayPause, play, pause, next, previous
+    case togglePlayPause, next, previous
     case seek(TimeInterval)
     case setShuffle(Bool)
     case setRepeat(RepeatMode)
@@ -92,9 +92,10 @@ class MediaBackend {
     func refresh() {}
     func send(_ command: MediaCommand) {}
 
-    func artwork(for track: TrackSnapshot) async -> NSImage? {
-        if let data = track.artworkData, let image = NSImage(data: data) { return image }
-        if let url = track.artworkURL { return await ArtworkLoader.image(from: url) }
+    /// Encoded artwork bytes; decoding happens off the main actor in MediaManager.
+    func artworkData(for track: TrackSnapshot) async -> Data? {
+        if let data = track.artworkData { return data }
+        if let url = track.artworkURL { return await ArtworkLoader.data(from: url) }
         return nil
     }
 
@@ -137,6 +138,7 @@ class MediaBackend {
 }
 
 /// Backends that read an app via AppleScript on a light poll, refreshed early by distributed notifications.
+/// Nothing is polled while none of the watched apps runs; their launch triggers the next read.
 @MainActor
 class PollingBackend: MediaBackend {
     private var pollTask: Task<Void, Never>?
@@ -145,10 +147,17 @@ class PollingBackend: MediaBackend {
     private var pendingRefresh = false
     private var pollStartedAt: Date?
 
-    var playingInterval: TimeInterval { 1 }
-    var idleInterval: TimeInterval { 3 }
+    /// Notifications report play state and track changes and elapsed time is extrapolated,
+    /// so the poll only needs to catch seeks while playing and anything missed while paused.
+    var playingInterval: TimeInterval { 5 }
+    var idleInterval: TimeInterval { 30 }
     var notificationNames: [String] { [] }
     var watchedBundleIDs: [String] { [] }
+
+    private var pollInterval: TimeInterval? {
+        guard watchedBundleIDs.contains(where: AppleScriptRunner.isRunning(bundleID:)) else { return nil }
+        return snapshot?.isPlaying == true ? playingInterval : idleInterval
+    }
 
     func poll() async {}
 
@@ -189,14 +198,7 @@ class PollingBackend: MediaBackend {
                 }
             })
         }
-        pollTask = Task { [weak self] in
-            while !Task.isCancelled {
-                guard let self else { return }
-                await self.runPoll()
-                let interval = self.snapshot?.isPlaying == true ? self.playingInterval : self.idleInterval
-                try? await Task.sleep(for: .seconds(interval))
-            }
-        }
+        refresh()
     }
 
     override func stop() {
@@ -239,15 +241,27 @@ class PollingBackend: MediaBackend {
         } while pendingRefresh && isRunning
         pollStartedAt = nil
         isPolling = false
+        scheduleNextPoll()
+    }
+
+    private func scheduleNextPoll() {
+        pollTask?.cancel()
+        pollTask = nil
+        guard isRunning, let interval = pollInterval else { return }
+        pollTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(interval))
+            guard !Task.isCancelled else { return }
+            await self?.runPoll()
+        }
     }
 }
 
 enum ArtworkLoader {
-    static func image(from url: URL) async -> NSImage? {
-        if url.isFileURL { return NSImage(contentsOf: url) }
+    static func data(from url: URL) async -> Data? {
+        if url.isFileURL { return try? Data(contentsOf: url) }
         guard let (data, response) = try? await URLSession.shared.data(from: url),
               (response as? HTTPURLResponse)?.statusCode ?? 200 < 400 else { return nil }
-        return NSImage(data: data)
+        return data
     }
 }
 

@@ -20,7 +20,7 @@ enum GeneralSettings {
 }
 
 struct GeneralSettingsView: View {
-    @AppStorage(CoreSettings.launchAtLogin) private var launchAtLogin
+    @State private var launchAtLogin = LaunchAtLogin.isEnabled
     @AppStorage(CoreSettings.displayTarget) private var displayTarget
     @AppStorage(CoreSettings.specificDisplayUUID) private var specificDisplay
     @AppStorage(CoreSettings.forceSimulatedNotch) private var forceSimulatedNotch
@@ -28,7 +28,6 @@ struct GeneralSettingsView: View {
     @AppStorage(CoreSettings.hoverDuration) private var hoverDuration
     @AppStorage(CoreSettings.haptics) private var haptics
     @AppStorage(CoreSettings.contrastOutline) private var contrastOutline
-    @AppStorage(CoreSettings.progressiveBlur) private var progressiveBlur
     @AppStorage(CoreSettings.swipeToToggle) private var swipeToToggle
     @AppStorage(CoreSettings.swipeToDismiss) private var swipeToDismiss
     @AppStorage(CoreSettings.swipeToSkip) private var swipeToSkip
@@ -69,7 +68,6 @@ struct GeneralSettingsView: View {
                 }
                 Toggle("Haptic Feedback", isOn: $haptics)
                 Toggle("Contrast Outline", isOn: $contrastOutline)
-                Toggle("Progressive Blur", isOn: $progressiveBlur)
                 SettingsSlider("Activity Duration", value: $activityDuration, in: 1...6, step: 0.5)
             }
 
@@ -102,7 +100,6 @@ struct GeneralSettingsView: View {
                 SettingsToggle("Force Simulated Notch", info: "Draw a notch on displays that do not have one.", isOn: $forceSimulatedNotch)
             }
         }
-        .onAppear { launchAtLogin = LaunchAtLogin.isEnabled }
     }
 }
 

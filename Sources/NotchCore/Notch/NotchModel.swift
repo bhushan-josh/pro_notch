@@ -8,7 +8,6 @@ public struct NotchGeometry: Equatable, Sendable {
     public var hasPhysicalNotch: Bool
     /// Draw a fake notch even when idle on a display without one.
     public var showsSimulatedNotch: Bool
-    public var screenFrame: CGRect
     public var displayUUID: String
 
     @MainActor
@@ -31,7 +30,6 @@ public struct NotchGeometry: Equatable, Sendable {
             notchSize: size,
             hasPhysicalNotch: hasNotch,
             showsSimulatedNotch: !hasNotch && Defaults[CoreSettings.forceSimulatedNotch],
-            screenFrame: screen.frame,
             displayUUID: screen.displayUUID
         )
     }
@@ -118,8 +116,9 @@ public final class NotchModel {
     public var selectedPageID = NotchModel.homePageID
     /// The display is showing a fullscreen app and the user asked to hide the notch there.
     public internal(set) var isHiddenForFullscreen = false
-    /// Frame of the visible shape in window coordinates (top-left origin).
-    public internal(set) var shapeFrame: CGRect = .zero
+    /// Frame of the visible shape in window coordinates (top-left origin). Read only by AppKit hit-testing,
+    /// so it is not observed: it changes on every animation frame.
+    @ObservationIgnored public internal(set) var shapeFrame: CGRect = .zero
 
     public static let homePageID = "home"
 

@@ -19,7 +19,15 @@ public final class ActivityCenter {
     /// Return false to drop an activity before it is shown (Focus modes use this to silence categories).
     @ObservationIgnored public var gate: ((LiveActivity) -> Bool)?
 
-    private init() {}
+    /// Mirrors the setting so SwiftUI tracks it; UserDefaults reads in a body are not observed.
+    private var prefersMostRecent = Defaults[CoreSettings.idleMostRecent]
+    @ObservationIgnored private var settingsObserver: AnyObject?
+
+    private init() {
+        settingsObserver = Defaults.observe([CoreSettings.idleMostRecent.name]) { [weak self] in
+            self?.prefersMostRecent = Defaults[CoreSettings.idleMostRecent]
+        }
+    }
 
     public var transientActivities: [LiveActivity] {
         entries.values
@@ -29,7 +37,7 @@ public final class ActivityCenter {
 
     public var idleActivities: [LiveActivity] {
         let providers = NotchRegistry.shared.idleProviders
-        let ordered = Defaults[CoreSettings.idleMostRecent]
+        let ordered = prefersMostRecent
             ? providers.sorted { $0.idleActivityUpdatedAt > $1.idleActivityUpdatedAt }
             : providers
         return ordered.compactMap(\.idleActivity)
@@ -71,7 +79,7 @@ public final class ActivityCenter {
 
     public func isPresented(id: String) -> Bool { entries[id] != nil }
 
-    /// Swipe-to-dismiss: drops the top transient activity, or hides idle ones until something changes.
+    /// Swipe-to-dismiss: drops the top transient activity.
     public func dismissCurrent() {
         if let top = transientActivities.first {
             dismiss(id: top.id)

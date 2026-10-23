@@ -13,6 +13,10 @@ final class WeatherManager {
     }
 
     private static let refreshInterval: TimeInterval = 30 * 60
+    private static let locationLifetime: TimeInterval = 15 * 60
+    // Owned by NotchCalendar, which this module cannot import.
+    private static let calendarEnabled = SettingKey("calendar.enabled", default: true)
+    private static let calendarShowsWeather = SettingKey("calendar.showWeatherOnEmptyDay", default: true)
     private static let settingsURL = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices")
 
     private(set) var state: State = .idle
@@ -23,7 +27,9 @@ final class WeatherManager {
     @ObservationIgnored private let delegate = LocationDelegate()
     @ObservationIgnored private var refreshTimer: Timer?
     @ObservationIgnored private var wakeObserver: NSObjectProtocol?
+    @ObservationIgnored private var wakeTask: Task<Void, Never>?
     @ObservationIgnored private var settingsObserver: AnyObject?
+    @ObservationIgnored private var consumerObserver: AnyObject?
     @ObservationIgnored private var manualDebounce: Task<Void, Never>?
     @ObservationIgnored private var fetchTask: Task<Void, Never>?
     @ObservationIgnored private var geocodeTask: Task<Void, Never>?
@@ -33,6 +39,8 @@ final class WeatherManager {
     @ObservationIgnored private var pendingForce = false
     @ObservationIgnored private var authorizationWaiters: [CheckedContinuation<Void, Never>] = []
     @ObservationIgnored private var isMonitoringSignificantChanges = false
+    @ObservationIgnored private var isStarted = false
+    @ObservationIgnored private var isSettingsVisible = false
     @ObservationIgnored private var isRunning = false
 
     init() {
@@ -70,11 +78,45 @@ final class WeatherManager {
     }
 
     func start() {
-        guard !isRunning else { return }
+        guard !isStarted else { return }
+        isStarted = true
+        consumerObserver = Defaults.observe([
+            LockSettings.widgetsEnabled.name, LockSettings.showWeatherWidget.name,
+            Self.calendarEnabled.name, Self.calendarShowsWeather.name,
+        ]) { [weak self] in self?.updateActivity() }
+        updateActivity()
+    }
+
+    func stop() {
+        isStarted = false
+        consumerObserver = nil
+        updateActivity()
+    }
+
+    /// The settings pane shows the current weather, so it counts as a consumer while open.
+    func setSettingsVisible(_ visible: Bool) {
+        isSettingsVisible = visible
+        updateActivity()
+    }
+
+    private var hasConsumer: Bool {
+        if isSettingsVisible { return true }
+        if Defaults[LockSettings.widgetsEnabled] && Defaults[LockSettings.showWeatherWidget] { return true }
+        return Defaults[Self.calendarEnabled] && Defaults[Self.calendarShowsWeather]
+    }
+
+    private func updateActivity() {
+        let wanted = isStarted && hasConsumer
+        guard wanted != isRunning else { return }
+        if wanted { activate() } else { deactivate() }
+    }
+
+    private func activate() {
         isRunning = true
         refreshTimer = Timer.scheduledTimer(withTimeInterval: Self.refreshInterval, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.refresh(force: true) }
         }
+        refreshTimer?.tolerance = 5 * 60
         wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
         ) { [weak self] _ in
@@ -84,31 +126,37 @@ final class WeatherManager {
             self?.settingsChanged()
         }
         updateSignificantChangeMonitoring()
-        refresh(force: true)
+        refresh()
     }
 
     private func refreshAfterWake() {
-        Task { [weak self] in
+        wakeTask?.cancel()
+        wakeTask = Task { [weak self] in
             // The network is usually not back the instant the Mac wakes.
             try? await Task.sleep(for: .seconds(8))
-            self?.refresh(force: true)
+            // Unlocking right after wake usually refreshed already.
+            guard !Task.isCancelled, let self, !self.fetchedRecently else { return }
+            self.refresh(force: true)
         }
     }
 
-    func stop() {
+    private var fetchedRecently: Bool {
+        fetchTask != nil || lastFetch.map { Date().timeIntervalSince($0.date) < 2 * 60 } ?? false
+    }
+
+    private func deactivate() {
         isRunning = false
         refreshTimer?.invalidate()
         refreshTimer = nil
         if let wakeObserver { NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver) }
         wakeObserver = nil
+        wakeTask?.cancel()
         settingsObserver = nil
         manualDebounce?.cancel()
         fetchTask?.cancel()
+        fetchTask = nil
         geocodeTask?.cancel()
-        if isMonitoringSignificantChanges {
-            locationManager.stopMonitoringSignificantLocationChanges()
-            isMonitoringSignificantChanges = false
-        }
+        updateSignificantChangeMonitoring()
         resumeAuthorizationWaiters()
     }
 
@@ -138,6 +186,12 @@ final class WeatherManager {
         }
         pendingForce = pendingForce || force
         if SystemStatus.shared.weather == nil { state = .loading }
+        if let lastLocation, Date().timeIntervalSince(lastLocation.timestamp) < Self.locationLifetime {
+            let force = pendingForce
+            pendingForce = false
+            fetch(for: lastLocation, force: force)
+            return
+        }
         locationManager.requestLocation()
     }
 
@@ -179,13 +233,14 @@ final class WeatherManager {
     private func received(_ locations: [CLLocation]) {
         guard let location = locations.last, !usesManualLocation else { return }
         lastLocation = location
+        guard isRunning else { return }
         let force = pendingForce
         pendingForce = false
         fetch(for: location, force: force)
     }
 
     private func locationFailed() {
-        guard !usesManualLocation else { return }
+        guard isRunning, !usesManualLocation else { return }
         let force = pendingForce
         pendingForce = false
         if let lastLocation {
@@ -242,9 +297,11 @@ final class WeatherManager {
                 guard !Task.isCancelled, let self else { return }
                 SystemStatus.shared.weather = snapshot
                 self.lastFetch = (location, Date(), fahrenheit)
+                self.fetchTask = nil
                 self.state = .ready
             } catch {
                 guard !Task.isCancelled, let self else { return }
+                self.fetchTask = nil
                 self.state = .failed("Weather is unavailable right now.")
             }
         }

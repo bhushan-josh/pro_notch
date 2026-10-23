@@ -51,8 +51,9 @@ final class StatusItemController: NSObject {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/tccutil")
         process.arguments = ["reset", "All", bundleID]
+        process.terminationHandler = { [weak self] _ in
+            DispatchQueue.main.async { MainActor.assumeIsolated { self?.onResetOnboarding?() } }
+        }
         try? process.run()
-        process.waitUntilExit()
-        onResetOnboarding?()
     }
 }

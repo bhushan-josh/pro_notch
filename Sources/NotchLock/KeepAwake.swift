@@ -7,8 +7,6 @@ import Observation
 final class KeepAwake {
     private var assertionID: IOPMAssertionID?
 
-    var isHeld: Bool { assertionID != nil }
-
     func set(_ hold: Bool) {
         hold ? acquire() : release()
     }

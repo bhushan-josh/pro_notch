@@ -14,13 +14,7 @@ struct ProgressRing: View {
         ZStack {
             Circle().stroke(tint.opacity(0.2), lineWidth: lineWidth)
             if indeterminate {
-                TimelineView(.animation) { context in
-                    let angle = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1) * 360
-                    Circle()
-                        .trim(from: 0, to: 0.28)
-                        .stroke(tint, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
-                        .rotationEffect(.degrees(angle))
-                }
+                SpinningArc(tint: tint, lineWidth: lineWidth)
             } else {
                 Circle()
                     .trim(from: 0, to: max(0.02, min(fraction, 1)))
@@ -32,15 +26,42 @@ struct ProgressRing: View {
     }
 }
 
+private struct SpinningArc: View {
+    var tint: Color
+    var lineWidth: CGFloat
+    @State private var isSpinning = false
+
+    var body: some View {
+        Circle()
+            .trim(from: 0, to: 0.28)
+            .stroke(tint, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+            .animation(.linear(duration: 1).repeatForever(autoreverses: false)) {
+                $0.rotationEffect(.degrees(isSpinning ? 360 : 0))
+            }
+            .onAppear { isSpinning = true }
+    }
+}
+
+@MainActor
 enum FileIcons {
+    private static var cache: [String: NSImage] = [:]
+
+    /// Finished files are looked up once by path; anything still downloading shares its extension's icon.
     static func icon(for item: DownloadItem) -> NSImage {
-        let url = item.fileURL
-        if FileManager.default.fileExists(atPath: url.path), !DownloadMonitor.isPartial(url) {
+        let ext = (item.displayName as NSString).pathExtension.lowercased()
+        let key = item.state == .active ? "ext:" + ext : "file:" + item.fileURL.path
+        if let cached = cache[key] { return cached }
+        if cache.count >= 64 { cache.removeAll() }
+        let icon = lookUp(item.state == .active ? nil : item.fileURL, ext: ext)
+        cache[key] = icon
+        return icon
+    }
+
+    private static func lookUp(_ url: URL?, ext: String) -> NSImage {
+        if let url, FileManager.default.fileExists(atPath: url.path), !DownloadMonitor.isPartial(url) {
             return NSWorkspace.shared.icon(forFile: url.path)
         }
-        let ext = (item.displayName as NSString).pathExtension
-        let type = UTType(filenameExtension: ext) ?? .data
-        return NSWorkspace.shared.icon(for: type)
+        return NSWorkspace.shared.icon(for: UTType(filenameExtension: ext) ?? .data)
     }
 }
 
@@ -183,16 +204,9 @@ struct DownloadsPage: View {
     let monitor: DownloadMonitor
 
     var body: some View {
+        // The page is unregistered once the list empties; this only shows during its exit animation.
         if monitor.items.isEmpty {
-            VStack(spacing: 6) {
-                Image(systemName: "arrow.down.circle")
-                    .font(.system(size: 26, weight: .light))
-                    .foregroundStyle(.white.opacity(0.35))
-                Text("No Recent Downloads")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.5))
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            Color.clear
         } else {
             VStack(spacing: 6) {
                 HStack {

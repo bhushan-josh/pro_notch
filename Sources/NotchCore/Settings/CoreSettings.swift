@@ -41,7 +41,6 @@ public enum ProgressStyle: String, CaseIterable, Sendable {
 }
 
 public enum CoreSettings {
-    public static let launchAtLogin = SettingKey("general.launchAtLogin", default: false)
     public static let displayTarget = SettingKey("general.displayTarget", default: DisplayTarget.builtIn)
     public static let specificDisplayUUID = SettingKey("general.specificDisplayUUID", default: "")
     public static let forceSimulatedNotch = SettingKey("general.forceSimulatedNotch", default: false)
@@ -50,14 +49,12 @@ public enum CoreSettings {
     public static let hoverDuration = SettingKey("general.hoverDuration", default: 0.25)
     public static let haptics = SettingKey("general.haptics", default: true)
     public static let contrastOutline = SettingKey("general.contrastOutline", default: false)
-    public static let progressiveBlur = SettingKey("general.progressiveBlur", default: true)
 
     public static let swipeToToggle = SettingKey("general.gestures.swipeToToggle", default: true)
     public static let swipeToDismiss = SettingKey("general.gestures.swipeToDismiss", default: true)
     public static let swipeToSkip = SettingKey("general.gestures.swipeToSkip", default: true)
     public static let swipeToCycleActivity = SettingKey("general.gestures.swipeToCycleActivity", default: false)
     public static let naturalMovement = SettingKey("general.gestures.naturalMovement", default: true)
-    public static let useAccentColor = SettingKey("general.gestures.useAccentColor", default: false)
 
     public static let hideFromScreenCapture = SettingKey("general.hideFromScreenCapture", default: false)
     public static let hideInFullscreen = SettingKey("general.hideInFullscreen", default: true)

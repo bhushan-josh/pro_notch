@@ -14,6 +14,9 @@ public final class HUDFeature: NotchFeature {
     private var settingsObserver: AnyObject?
     private var pendingKeyboardRead: Task<Void, Never>?
     private var lastAccessWarning: Date?
+    /// Read on every key event inside the tap, so kept current by the settings observer instead.
+    private var replaceSystemHUD = true
+    private var enabledKinds: Set<HUDKind> = []
 
     private static let coarseStep = 1.0 / 16
     private static let fineStep = 1.0 / 64
@@ -39,14 +42,22 @@ public final class HUDFeature: NotchFeature {
         brightness.start()
         keyboard.start()
 
+        loadKeySettings()
         mediaKeys.handler = { [weak self] event in self?.handle(event) ?? false }
         mediaKeys.start()
 
         betterDisplay.onLevel = { [weak self] level in self?.showBetterDisplay(level) }
         updateBetterDisplay()
-        settingsObserver = Defaults.observe([HUDSettings.betterDisplayIntegration.name]) { [weak self] in
+        let keys = [HUDSettings.betterDisplayIntegration, HUDSettings.replaceSystemHUD] + HUDKind.allCases.map(\.enabledKey)
+        settingsObserver = Defaults.observe(keys.map(\.name)) { [weak self] in
+            self?.loadKeySettings()
             self?.updateBetterDisplay()
         }
+    }
+
+    private func loadKeySettings() {
+        replaceSystemHUD = Defaults[HUDSettings.replaceSystemHUD]
+        enabledKinds = Set(HUDKind.allCases.filter(\.isEnabled))
     }
 
     public func stop() {
@@ -65,7 +76,7 @@ public final class HUDFeature: NotchFeature {
 
     /// Without Accessibility the key tap can't swallow events, so macOS draws its own HUD too. Say so in the notch.
     private func warnIfSystemHUDLeaks() {
-        guard Defaults[HUDSettings.replaceSystemHUD], !mediaKeys.isInstalled else { return }
+        guard replaceSystemHUD, !mediaKeys.isInstalled else { return }
         if let last = lastAccessWarning, Date().timeIntervalSince(last) < 60 { return }
         lastAccessWarning = Date()
         ActivityCenter.shared.present(LiveActivity(
@@ -103,14 +114,13 @@ public final class HUDFeature: NotchFeature {
     // MARK: Media keys
 
     private func handle(_ event: MediaKeyEvent) -> Bool {
-        let replace = Defaults[HUDSettings.replaceSystemHUD]
-        hudLog.notice("handle replace=\(replace, privacy: .public) volEnabled=\(HUDKind.volume.isEnabled, privacy: .public) canSet=\(self.volume.canSetVolume, privacy: .public) canMute=\(self.volume.canMute, privacy: .public) brightAvail=\(self.brightness.isAvailable, privacy: .public) vol=\(self.volume.volume, privacy: .public) bright=\(self.brightness.brightness, privacy: .public)")
+        let replace = replaceSystemHUD
         // Runs inside the event tap: decide from cached state only and defer the work so the tap returns fast.
         switch event.key {
         case .soundUp, .soundDown, .mute:
             if volume.deviceID != outputs.defaultDeviceID { volume.bind(to: outputs.defaultDeviceID) }
             let capable = event.key == .mute ? volume.canMute : volume.canSetVolume
-            guard replace, HUDKind.volume.isEnabled, capable else { return false }
+            guard replace, enabledKinds.contains(.volume), capable else { return false }
             if event.isDown {
                 DispatchQueue.main.async { [weak self] in self?.adjustVolume(event) }
             } else if event.key != .mute {
@@ -119,7 +129,7 @@ public final class HUDFeature: NotchFeature {
             return true
 
         case .brightnessUp, .brightnessDown:
-            guard replace, HUDKind.brightness.isEnabled, brightness.isAvailable else {
+            guard replace, enabledKinds.contains(.brightness), brightness.isAvailable else {
                 if event.isDown { brightness.noteUserIntent() }
                 return false
             }
@@ -127,7 +137,7 @@ public final class HUDFeature: NotchFeature {
             return true
 
         case .illuminationUp, .illuminationDown, .illuminationToggle:
-            guard HUDKind.keyboard.isEnabled, keyboard.isAvailable else { return false }
+            guard enabledKinds.contains(.keyboard), keyboard.isAvailable else { return false }
             guard replace else {
                 if event.isDown { scheduleKeyboardRead() }
                 return false
@@ -163,7 +173,7 @@ public final class HUDFeature: NotchFeature {
         let step = event.isFine ? Self.fineStep : Self.coarseStep
         let direction: Double = event.key == .brightnessUp ? 1 : -1
         let target = Self.stepped(brightness.brightness, by: direction, step: step)
-        brightness.setBrightness(target, smooth: true)
+        brightness.setBrightness(target)
         presenter.show(.brightness, value: target, symbol: HUDPresenter.brightnessSymbol(level: target))
     }
 

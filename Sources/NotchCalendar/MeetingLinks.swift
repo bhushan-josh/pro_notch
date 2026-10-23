@@ -37,9 +37,12 @@ struct MeetingLink: Equatable, Sendable {
 }
 
 enum MeetingLinks {
-    private static let expressions: [(MeetingProvider, NSRegularExpression)] = MeetingProvider.allCases.compactMap { provider in
-        (try? NSRegularExpression(pattern: provider.pattern, options: [.caseInsensitive])).map { (provider, $0) }
-    }
+    private static let providers = MeetingProvider.allCases
+    /// One capture group per provider, so a single scan finds the earliest link of any kind.
+    private static let expression = try? NSRegularExpression(
+        pattern: providers.map { "(\($0.pattern))" }.joined(separator: "|"),
+        options: [.caseInsensitive]
+    )
 
     /// Checks the sources in order, so an explicit event URL wins over a link buried in the notes.
     static func detect(url: URL?, location: String?, notes: String?) -> MeetingLink? {
@@ -51,17 +54,17 @@ enum MeetingLinks {
     }
 
     private static func firstLink(in text: String) -> MeetingLink? {
-        let range = NSRange(text.startIndex..., in: text)
-        var best: (location: Int, link: MeetingLink)?
-        for (provider, expression) in expressions {
-            guard let match = expression.firstMatch(in: text, range: range),
-                  let swiftRange = Range(match.range, in: text) else { continue }
+        guard let expression else { return nil }
+        var link: MeetingLink?
+        expression.enumerateMatches(in: text, range: NSRange(text.startIndex..., in: text)) { match, _, stop in
+            guard let match,
+                  let group = providers.indices.first(where: { match.range(at: $0 + 1).location != NSNotFound }),
+                  let swiftRange = Range(match.range, in: text) else { return }
             let raw = String(text[swiftRange]).trimmingCharacters(in: CharacterSet(charactersIn: ".,;)>]"))
-            guard let url = URL(string: raw) else { continue }
-            if best == nil || match.range.location < best!.location {
-                best = (match.range.location, MeetingLink(provider: provider, url: url))
-            }
+            guard let url = URL(string: raw) else { return }
+            link = MeetingLink(provider: providers[group], url: url)
+            stop.pointee = true
         }
-        return best?.link
+        return link
     }
 }

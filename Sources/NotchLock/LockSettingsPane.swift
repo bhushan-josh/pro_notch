@@ -77,6 +77,8 @@ struct LockSettingsView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
+        .onAppear { weather.setSettingsVisible(true) }
+        .onDisappear { weather.setSettingsVisible(false) }
     }
 }
 

@@ -58,8 +58,6 @@ public final class SystemStatus {
     public var isMediaPlaying = false
     /// Written by NotchLock's weather manager.
     public var weather: WeatherSnapshot?
-    /// Written by NotchCore's window controllers, keyed by display UUID.
-    public var fullscreenDisplays: Set<String> = []
 
     private init() {}
 }

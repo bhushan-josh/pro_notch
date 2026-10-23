@@ -12,8 +12,6 @@ final class BluetoothMonitor: NSObject {
     private var disconnectNotifications: [String: IOBluetoothUserNotification] = [:]
     private var startedAt = Date.distantPast
 
-    var isRunning: Bool { connectNotification != nil }
-
     func start() {
         guard connectNotification == nil else { return }
         startedAt = Date()

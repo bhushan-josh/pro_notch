@@ -54,10 +54,13 @@ final class BrowserBackend: PollingBackend {
     private struct TabInfo {
         var ref: TabRef
         var isActive: Bool
+        var isFrontWindow: Bool
         var url: String
     }
 
     private var activeTab: TabRef?
+    /// Nonzero while user commands run, so a probe batch stops early instead of delaying them on the script queue.
+    private var pendingCommands = 0
     /// Restricts playback detection to these browsers; nil allows every supported browser.
     var allowed: Set<Browser>? {
         didSet { if allowed != oldValue { refresh() } }
@@ -72,8 +75,9 @@ final class BrowserBackend: PollingBackend {
 
     init() { super.init(kind: .browser) }
 
-    override var playingInterval: TimeInterval { 1.5 }
-    override var idleInterval: TimeInterval { 3 }
+    // Playing polls probe just the playing tab; idle polls list tabs and probe the likely candidates.
+    override var playingInterval: TimeInterval { 2 }
+    override var idleInterval: TimeInterval { 10 }
     override var watchedBundleIDs: [String] { Browser.allCases.map(\.rawValue) }
     override var capabilities: Set<MediaCapability> { [.seek, .skip] }
 
@@ -87,14 +91,25 @@ final class BrowserBackend: PollingBackend {
             return
         }
 
+        var paused: (TabRef, TrackSnapshot)?
+        if let tab = activeTab, snapshot?.isPlaying == true, running.contains(tab.browser), let track = await read(tab) {
+            if track.isPlaying {
+                publish(track)
+                return
+            }
+            paused = (tab, track)
+        }
+
         var tabs: [TabInfo] = []
         for browser in running {
+            guard pendingCommands == 0 else { return }
             tabs += await listTabs(of: browser)
         }
 
         var probes = 0
-        var paused: (TabRef, TrackSnapshot)?
         for tab in ordered(tabs) where probes < Self.maxProbesPerPoll {
+            if tab.ref == paused?.0 { continue }
+            guard pendingCommands == 0 else { return }
             probes += 1
             guard let track = await read(tab.ref) else { continue }
             if track.isPlaying {
@@ -113,12 +128,13 @@ final class BrowserBackend: PollingBackend {
         }
     }
 
-    /// The last playing tab first, then media sites, then each window's front tab.
+    /// The last playing tab first, then media sites, then the front tab of the browser the user is in.
     private func ordered(_ tabs: [TabInfo]) -> [TabInfo] {
+        let frontmost = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
         func score(_ tab: TabInfo) -> Int {
             if tab.ref == activeTab { return 0 }
             if Self.isMediaSite(tab.url) { return tab.isActive ? 1 : 2 }
-            return tab.isActive ? 3 : 9
+            return tab.isActive && tab.isFrontWindow && tab.ref.browser.rawValue == frontmost ? 3 : 9
         }
         return tabs
             .filter { $0.url.hasPrefix("http") && score($0) < 9 }
@@ -131,35 +147,37 @@ final class BrowserBackend: PollingBackend {
     }
 
     private func listTabs(of browser: Browser) async -> [TabInfo] {
+        // Whole-list reads cost one Apple Event per window instead of two per tab. Windows come front to back.
         let body = browser.isSafari
             ? """
-                repeat with w in windows
-                    set wid to id of w
-                    set ci to index of current tab of w
-                    set i to 0
-                    repeat with t in tabs of w
-                        set i to i + 1
-                        set end of out to (wid as text) & sep & (i as text) & sep & ((i = ci) as text) & sep & (URL of t as text)
-                    end repeat
-                end repeat
+                        set ai to index of current tab of w
+                        set urls to URL of every tab of w
+                        set ids to {}
+                        repeat with i from 1 to count of urls
+                            set end of ids to i
+                        end repeat
             """
             : """
-                repeat with w in windows
-                    set wid to id of w
-                    set ai to active tab index of w
-                    set i to 0
-                    repeat with t in tabs of w
-                        set i to i + 1
-                        set end of out to (wid as text) & sep & (id of t as text) & sep & ((i = ai) as text) & sep & (URL of t as text)
-                    end repeat
-                end repeat
+                        set ai to active tab index of w
+                        set ids to id of every tab of w
+                        set urls to URL of every tab of w
             """
         let script = """
         set sep to character id 9
         set out to {}
         if application id "\(browser.rawValue)" is running then
             tell application id "\(browser.rawValue)"
+                set wids to id of every window
+                repeat with wi from 1 to count of wids
+                    set wid to item wi of wids
+                    try
+                        set w to window id wid
         \(body)
+                        repeat with i from 1 to count of ids
+                            set end of out to (wid as text) & sep & (item i of ids as text) & sep & ((i = ai) as text) & sep & ((wi = 1) as text) & sep & (item i of urls as text)
+                        end repeat
+                    end try
+                end repeat
             end tell
         end if
         set AppleScript's text item delimiters to linefeed
@@ -169,9 +187,14 @@ final class BrowserBackend: PollingBackend {
             let text = try await AppleScriptRunner.run(script).stringValue ?? ""
             BrowserAccess.shared.note(browser, automationAllowed: true)
             return text.split(separator: "\n").compactMap { line in
-                let parts = line.split(separator: "\t", maxSplits: 3, omittingEmptySubsequences: false).map(String.init)
-                guard parts.count == 4 else { return nil }
-                return TabInfo(ref: TabRef(browser: browser, windowID: parts[0], tabID: parts[1]), isActive: parts[2] == "true", url: parts[3])
+                let parts = line.split(separator: "\t", maxSplits: 4, omittingEmptySubsequences: false).map(String.init)
+                guard parts.count == 5 else { return nil }
+                return TabInfo(
+                    ref: TabRef(browser: browser, windowID: parts[0], tabID: parts[1]),
+                    isActive: parts[2] == "true",
+                    isFrontWindow: parts[3] == "true",
+                    url: parts[4]
+                )
             }
         } catch let error as AppleScriptRunner.ScriptError {
             if error.code == -1743 { BrowserAccess.shared.note(browser, automationAllowed: false) }
@@ -260,8 +283,8 @@ final class BrowserBackend: PollingBackend {
         (function(){var h=location.hostname,e=__dnPick(),cmd='\(command)',arg=\(argument);
         function click(s){var b=document.querySelector(s);if(b){b.click();return true;}return false;}
         var spotify=h.indexOf('spotify.com')>=0,ytm=h==='music.youtube.com',yt=!ytm&&h.indexOf('youtube.com')>=0,sc=h.indexOf('soundcloud.com')>=0;
-        if(cmd==='toggle'||cmd==='play'||cmd==='pause'){
-          if(e){var want=cmd==='toggle'?e.paused:cmd==='play';if(want)e.play();else e.pause();return 'ok';}
+        if(cmd==='toggle'){
+          if(e){if(e.paused)e.play();else e.pause();return 'ok';}
           if(spotify&&click('[data-testid="control-button-playpause"]'))return 'ok';
           if(ytm&&click('#play-pause-button'))return 'ok';
           if(sc&&click('.playControl'))return 'ok';
@@ -292,12 +315,6 @@ final class BrowserBackend: PollingBackend {
         case .togglePlayPause:
             script = Self.commandScript("toggle")
             optimistic { $0.isPlaying.toggle() }
-        case .play:
-            script = Self.commandScript("play")
-            optimistic { $0.isPlaying = true }
-        case .pause:
-            script = Self.commandScript("pause")
-            optimistic { $0.isPlaying = false }
         case .next:
             script = Self.commandScript("next")
         case .previous:
@@ -309,8 +326,10 @@ final class BrowserBackend: PollingBackend {
         case .setShuffle, .setRepeat, .setLiked:
             return
         }
+        pendingCommands += 1
         Task {
             _ = await runJS(script, in: tab)
+            pendingCommands -= 1
             refreshSoon(0.6)
         }
     }

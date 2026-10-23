@@ -4,8 +4,6 @@ import NotchCore
 import Observation
 import os
 
-private let downloadLog = Logger(subsystem: "com.personal.DynamicNotch", category: "downloads")
-
 struct DownloadItem: Identifiable, Equatable {
     enum State: Equatable {
         case active, finished, failed
@@ -19,8 +17,6 @@ struct DownloadItem: Identifiable, Equatable {
     var completedBytes: Int64
     var fraction: Double
     var state = State.active
-    var startedAt = Date()
-    var finishedAt: Date?
     var finalURL: URL?
     var bytesPerSecond: Double = 0
 
@@ -49,7 +45,7 @@ final class DownloadMonitor {
     @ObservationIgnored private var subscriptions: [Any] = []
     @ObservationIgnored private var observers: [UUID: [NSKeyValueObservation]] = [:]
     @ObservationIgnored private var samples: [UUID: (time: Date, bytes: Int64)] = [:]
-    @ObservationIgnored private var pendingUpdate = false
+    nonisolated private let pendingUpdate = OSAllocatedUnfairLock(initialState: false)
     @ObservationIgnored private var expiryTasks: [UUID: Task<Void, Never>] = [:]
     @ObservationIgnored private var lastChange: [UUID: Date] = [:]
     @ObservationIgnored private var staleCheck: Task<Void, Never>?
@@ -141,16 +137,11 @@ final class DownloadMonitor {
         items.insert(item, at: 0)
         samples[id] = (Date(), progress.completedUnitCount)
         lastChange[id] = Date()
-        downloadLog.notice("started \(item.displayName, privacy: .public) total=\(item.totalBytes, privacy: .public)")
         if replaced.isEmpty { onStart?(items[0]) } else { onUpdate?() }
 
         observers[id] = [
-            progress.observe(\.completedUnitCount) { [weak self] _, _ in
-                DispatchQueue.main.async { MainActor.assumeIsolated { self?.scheduleUpdate() } }
-            },
-            progress.observe(\.totalUnitCount) { [weak self] _, _ in
-                DispatchQueue.main.async { MainActor.assumeIsolated { self?.scheduleUpdate() } }
-            },
+            progress.observe(\.completedUnitCount) { [weak self] _, _ in self?.scheduleUpdate() },
+            progress.observe(\.totalUnitCount) { [weak self] _, _ in self?.scheduleUpdate() },
         ]
         progressByID[id] = progress
         startStaleCheck()
@@ -159,12 +150,16 @@ final class DownloadMonitor {
     @ObservationIgnored private var progressByID: [UUID: Progress] = [:]
 
     /// Progress objects can update thousands of times a second; fold them into ~8 UI updates per second.
-    private func scheduleUpdate() {
-        guard !pendingUpdate else { return }
-        pendingUpdate = true
+    /// Called on the KVO thread, so the main thread only wakes once per batch.
+    nonisolated private func scheduleUpdate() {
+        let alreadyPending = pendingUpdate.withLock { pending in
+            defer { pending = true }
+            return pending
+        }
+        guard !alreadyPending else { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
             MainActor.assumeIsolated {
-                self?.pendingUpdate = false
+                self?.pendingUpdate.withLock { $0 = false }
                 self?.refreshFromProgress()
             }
         }
@@ -172,31 +167,48 @@ final class DownloadMonitor {
 
     private func refreshFromProgress() {
         let now = Date()
-        for index in items.indices where items[index].state == .active {
-            let id = items[index].id
-            guard let progress = progressByID[id] else { continue }
+        var updated = items
+        for index in updated.indices where updated[index].state == .active {
+            var item = updated[index]
+            guard let progress = progressByID[item.id] else { continue }
             let completed = progress.completedUnitCount
-            if completed != items[index].completedBytes { lastChange[id] = now }
-            syncURL(of: index, from: progress)
-            items[index].totalBytes = progress.totalUnitCount
-            items[index].completedBytes = completed
-            items[index].fraction = progress.totalUnitCount > 0 ? progress.fractionCompleted : 0
-            if let sample = samples[id], now.timeIntervalSince(sample.time) >= 1 {
-                let rate = Double(completed - sample.bytes) / now.timeIntervalSince(sample.time)
-                let previous = items[index].bytesPerSecond
-                items[index].bytesPerSecond = previous > 0 ? previous * 0.6 + max(rate, 0) * 0.4 : max(rate, 0)
-                samples[id] = (now, completed)
+            let total = progress.totalUnitCount
+            if completed != item.completedBytes { lastChange[item.id] = now }
+            Self.syncURL(&item, from: progress)
+            item.totalBytes = total
+            item.completedBytes = completed
+            item.fraction = total > 0 ? progress.fractionCompleted : 0
+            if let sample = samples[item.id], now.timeIntervalSince(sample.time) >= 1 {
+                let rate = max(Double(completed - sample.bytes) / now.timeIntervalSince(sample.time), 0)
+                item.bytesPerSecond = item.bytesPerSecond > 0 ? item.bytesPerSecond * 0.6 + rate * 0.4 : rate
+                samples[item.id] = (now, completed)
             }
+            updated[index] = item
         }
+        if updated != items { items = updated }
         onUpdate?()
     }
 
     private func finish(id: UUID, progress: Progress, attempt: Int = 0) {
         forget(id)
         guard let index = items.firstIndex(where: { $0.id == id && $0.state == .active }) else { return }
-        syncURL(of: index, from: progress)
         var item = items[index]
-        let finalURL = Self.finalURL(for: item.partialURL) ?? Self.recentlyFinished(near: item)
+        if Self.syncURL(&item, from: progress) { items[index] = item }
+        if let finalURL = Self.finalURL(for: item.partialURL) {
+            complete(id: id, progress: progress, attempt: attempt, finalURL: finalURL)
+            return
+        }
+        let snapshot = item
+        Task { [weak self] in
+            let found = await Task.detached(priority: .utility) { Self.recentlyFinished(near: snapshot) }.value
+            self?.complete(id: id, progress: progress, attempt: attempt, finalURL: found)
+        }
+    }
+
+    private func complete(id: UUID, progress: Progress, attempt: Int, finalURL: URL?) {
+        // The item may have been removed or replaced while the folder was being searched.
+        guard let index = items.firstIndex(where: { $0.id == id && $0.state == .active }) else { return }
+        var item = items[index]
         let bytesComplete = item.totalBytes <= 0 || progress.completedUnitCount >= item.totalBytes || progress.fractionCompleted >= 0.999
         // Browsers can unpublish just before renaming "x.crdownload" to "x".
         if finalURL == nil, !progress.isCancelled, bytesComplete, attempt < 6 {
@@ -208,7 +220,6 @@ final class DownloadMonitor {
         let completed = !progress.isCancelled && finalURL != nil && bytesComplete
         item.state = completed ? .finished : .failed
         item.finalURL = finalURL
-        item.finishedAt = Date()
         if completed {
             item.fraction = 1
             item.completedBytes = max(item.completedBytes, item.totalBytes)
@@ -216,7 +227,6 @@ final class DownloadMonitor {
         }
         items[index] = item
         scheduleExpiry(of: id)
-        downloadLog.notice("finished \(item.displayName, privacy: .public) state=\(String(describing: item.state), privacy: .public)")
         onFinish?(item)
     }
 
@@ -231,14 +241,25 @@ final class DownloadMonitor {
         guard staleCheck == nil else { return }
         staleCheck = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(15))
+                try? await Task.sleep(for: .seconds(2), tolerance: .seconds(0.5))
                 guard !Task.isCancelled, let self else { return }
                 if !self.failStaleItems() {
                     self.staleCheck = nil
                     return
                 }
+                self.decayStalledRates()
             }
         }
+    }
+
+    /// Throughput only updates when bytes arrive, so a stalled download would otherwise keep showing its last speed.
+    private func decayStalledRates() {
+        let now = Date()
+        let stalled = items.contains { item in
+            guard item.state == .active, item.bytesPerSecond > 0, let last = lastChange[item.id] else { return false }
+            return now.timeIntervalSince(last) >= 2
+        }
+        if stalled { refreshFromProgress() }
     }
 
     /// Fails downloads whose publisher went away without unpublishing, so they expire. Returns whether any remain active.
@@ -252,9 +273,7 @@ final class DownloadMonitor {
                   !FileManager.default.fileExists(atPath: items[index].partialURL.path) else { continue }
             forget(id)
             items[index].state = .failed
-            items[index].finishedAt = now
             scheduleExpiry(of: id)
-            downloadLog.notice("stale \(self.items[index].displayName, privacy: .public)")
             changed = true
         }
         if changed { onUpdate?() }
@@ -269,10 +288,12 @@ final class DownloadMonitor {
     }
 
     /// Chrome-based browsers start with "Unconfirmed 123.crdownload" and rename once the real name is known.
-    private func syncURL(of index: Int, from progress: Progress) {
-        guard let url = (progress.userInfo[.fileURLKey] as? URL) ?? progress.fileURL, url != items[index].partialURL else { return }
-        items[index].partialURL = url
-        items[index].displayName = Self.displayName(for: url)
+    @discardableResult
+    private static func syncURL(_ item: inout DownloadItem, from progress: Progress) -> Bool {
+        guard let url = (progress.userInfo[.fileURLKey] as? URL) ?? progress.fileURL, url != item.partialURL else { return false }
+        item.partialURL = url
+        item.displayName = displayName(for: url)
+        return true
     }
 
     // MARK: File names

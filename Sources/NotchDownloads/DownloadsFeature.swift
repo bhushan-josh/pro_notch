@@ -1,7 +1,6 @@
 import AppKit
 import NotchCore
 import SwiftUI
-import os
 
 @MainActor
 public final class DownloadsFeature: NotchFeature {
@@ -12,7 +11,6 @@ public final class DownloadsFeature: NotchFeature {
     private let monitor = DownloadMonitor()
     private var settingsObserver: AnyObject?
     private var peekTask: Task<Void, Never>?
-    private var isRunning = false
 
     public init() {}
 
@@ -35,6 +33,7 @@ public final class DownloadsFeature: NotchFeature {
     }
 
     public func stop() {
+        updatePage(visible: false)
         monitor.stop()
         peekTask?.cancel()
         ActivityCenter.shared.dismiss(id: Self.progressActivityID)
@@ -45,13 +44,11 @@ public final class DownloadsFeature: NotchFeature {
         let enabled = Defaults[DownloadsSettings.enabled]
         if enabled {
             monitor.start()
-            isRunning = true
             updatePage(visible: !monitor.items.isEmpty)
         } else {
             updatePage(visible: false)
             monitor.stop()
             ActivityCenter.shared.dismiss(id: Self.progressActivityID)
-            isRunning = false
         }
     }
 
@@ -60,7 +57,6 @@ public final class DownloadsFeature: NotchFeature {
         let registry = NotchRegistry.shared
         if visible, Defaults[DownloadsSettings.enabled] {
             guard !registry.pages.contains(where: { $0.id == Self.pageID }) else { return }
-            Logger(subsystem: "com.personal.DynamicNotch", category: "downloads").notice("downloads page shown")
             let monitor = monitor
             withAnimation(.notchSnappy) {
                 registry.register(page: NotchPage(id: Self.pageID, title: "Downloads", symbol: "arrow.down.circle.fill", order: 20) {
@@ -68,9 +64,6 @@ public final class DownloadsFeature: NotchFeature {
                 })
             }
         } else {
-            if registry.pages.contains(where: { $0.id == Self.pageID }) {
-                Logger(subsystem: "com.personal.DynamicNotch", category: "downloads").notice("downloads page hidden")
-            }
             for model in NotchManager.shared.models where model.selectedPageID == Self.pageID {
                 model.selectedPageID = NotchModel.homePageID
             }

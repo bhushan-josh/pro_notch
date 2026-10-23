@@ -40,11 +40,7 @@ final class MediaKeyManager {
 
     func start() {
         install()
-        timer?.invalidate()
-        // Accessibility can be granted at any time; keep retrying, and revive the tap if the system disabled it.
-        timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.maintain() }
-        }
+        scheduleMaintenance()
     }
 
     func stop() {
@@ -53,23 +49,28 @@ final class MediaKeyManager {
         uninstall()
     }
 
+    /// Accessibility can be granted at any time, so retry often until the tap exists. After that the callback
+    /// revives a disabled tap and this is only a rare health check.
+    private func scheduleMaintenance() {
+        timer?.invalidate()
+        let interval: TimeInterval = isInstalled ? 60 : 3
+        timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.maintain() }
+        }
+        timer?.tolerance = interval / 5
+    }
+
     private func maintain() {
         if let tap {
             if !CGEvent.tapIsEnabled(tap: tap) { CGEvent.tapEnable(tap: tap, enable: true) }
         } else {
             install()
+            if isInstalled { scheduleMaintenance() }
         }
     }
 
-    private var loggedTrust: Bool?
-
     private func install() {
-        let trusted = AXIsProcessTrusted()
-        if loggedTrust != trusted {
-            loggedTrust = trusted
-            hudLog.notice("accessibility trusted=\(trusted, privacy: .public)")
-        }
-        guard tap == nil, trusted else { return }
+        guard tap == nil, AXIsProcessTrusted() else { return }
         let mask = CGEventMask(1) << CGEventMask(Self.systemDefinedType.rawValue)
         guard let port = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
@@ -78,11 +79,7 @@ final class MediaKeyManager {
             eventsOfInterest: mask,
             callback: mediaKeyTapCallback,
             userInfo: Unmanaged.passUnretained(self).toOpaque()
-        ) else {
-            hudLog.error("CGEvent.tapCreate failed")
-            return
-        }
-        hudLog.notice("media key tap installed")
+        ) else { return }
         let runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, port, 0)
         CFRunLoopAddSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
         CGEvent.tapEnable(tap: port, enable: true)
@@ -125,8 +122,6 @@ final class MediaKeyManager {
 
     // MARK: Accessibility
 
-    static var isTrusted: Bool { AXIsProcessTrusted() }
-
     static func requestTrust() {
         Defaults[HUDSettings.accessibilityRequested] = true
         _ = AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
@@ -151,7 +146,6 @@ private let mediaKeyTapCallback: CGEventTapCallBack = { _, type, event, userInfo
     guard let userInfo else { return Unmanaged.passUnretained(event) }
     let manager = Unmanaged<MediaKeyManager>.fromOpaque(userInfo).takeUnretainedValue()
     if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-        hudLog.notice("tap disabled by system, type=\(type.rawValue, privacy: .public)")
         MainActor.assumeIsolated { manager.reenable() }
         return Unmanaged.passUnretained(event)
     }
@@ -159,6 +153,5 @@ private let mediaKeyTapCallback: CGEventTapCallBack = { _, type, event, userInfo
         return Unmanaged.passUnretained(event)
     }
     let consume = MainActor.assumeIsolated { manager.handle(decoded) }
-    hudLog.notice("key \(decoded.key.rawValue, privacy: .public) down=\(decoded.isDown, privacy: .public) consumed=\(consume, privacy: .public)")
     return consume ? nil : Unmanaged.passUnretained(event)
 }

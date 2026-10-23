@@ -37,6 +37,8 @@ private final class LockScreenHostingView<Content: View>: NSHostingView<Content>
 @Observable
 final class LockScreenWindowModel {
     var isPresented = false
+    /// Stays true through the fade-out so hidden widgets leave the hierarchy only once invisible.
+    var isMounted = false
 }
 
 /// The transparent panel below the lock screen clock that hosts the registered lock screen widgets.
@@ -84,6 +86,7 @@ final class LockScreenWindowController {
         hideTask?.cancel()
         isShown = false
         model.isPresented = false
+        model.isMounted = false
         OverlaySpace.shared.remove(panel)
         panel.orderOut(nil)
     }
@@ -120,6 +123,11 @@ final class LockScreenWindowController {
         guard !isShown || !panel.isVisible else { return }
         isShown = true
         layout()
+        if !model.isMounted {
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) { model.isMounted = true }
+        }
         panel.orderFrontRegardless()
         OverlaySpace.shared.add(panel)
         withAnimation(.spring(response: 0.5, dampingFraction: 0.82)) { model.isPresented = true }
@@ -135,6 +143,7 @@ final class LockScreenWindowController {
             guard !Task.isCancelled, let self else { return }
             OverlaySpace.shared.remove(self.panel)
             self.panel.orderOut(nil)
+            self.model.isMounted = false
         }
     }
 
@@ -158,7 +167,8 @@ struct LockScreenWidgetStack: View {
     private let status = SystemStatus.shared
 
     private var widgets: [LockScreenWidget] {
-        registry.lockScreenWidgets.filter { widget in
+        guard model.isMounted else { return [] }
+        return registry.lockScreenWidgets.filter { widget in
             switch widget.id {
             case "media": showMedia && status.isMediaPlaying
             case WeatherWidget.id: showWeather && status.weather != nil

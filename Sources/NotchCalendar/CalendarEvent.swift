@@ -1,13 +1,14 @@
 import AppKit
 import EventKit
 import SwiftUI
+import Synchronization
 
 struct EventCoordinate: Equatable, Sendable {
     var latitude: Double
     var longitude: Double
 }
 
-struct CalendarEvent: Identifiable, Equatable {
+struct CalendarEvent: Identifiable, Equatable, Sendable {
     /// Unique per occurrence; `eventIdentifier` is shared by every occurrence of a recurring event.
     let id: String
     let eventIdentifier: String
@@ -15,12 +16,10 @@ struct CalendarEvent: Identifiable, Equatable {
     let start: Date
     let end: Date
     let isAllDay: Bool
-    let calendarID: String
-    let calendarTitle: String
     let calendarColor: Color
     let location: String?
     let coordinate: EventCoordinate?
-    let meeting: MeetingLink?
+    private let meetingSource: MeetingSource
 
     init(_ event: EKEvent) {
         let identifier = event.eventIdentifier ?? event.calendarItemIdentifier
@@ -32,16 +31,16 @@ struct CalendarEvent: Identifiable, Equatable {
         self.start = start
         end = event.endDate ?? start
         isAllDay = event.isAllDay
-        calendarID = event.calendar?.calendarIdentifier ?? ""
-        calendarTitle = event.calendar?.title ?? ""
         calendarColor = event.calendar?.color.map { Color(nsColor: $0) } ?? .red
         let trimmedLocation = event.location?.trimmingCharacters(in: .whitespacesAndNewlines)
         location = trimmedLocation?.isEmpty == false ? trimmedLocation : nil
         coordinate = event.structuredLocation?.geoLocation.map {
             EventCoordinate(latitude: $0.coordinate.latitude, longitude: $0.coordinate.longitude)
         }
-        meeting = MeetingLinks.detect(url: event.url, location: event.location, notes: event.notes)
+        meetingSource = MeetingSource(url: event.url, location: event.location, notes: event.notes)
     }
+
+    var meeting: MeetingLink? { meetingSource.link }
 
     func isInProgress(at date: Date) -> Bool { start <= date && date < end }
     func hasEnded(at date: Date) -> Bool { end <= date }
@@ -53,6 +52,33 @@ struct CalendarEvent: Identifiable, Equatable {
         guard let location, MeetingLinks.detect(url: nil, location: location, notes: nil) == nil,
               !location.lowercased().hasPrefix("http") else { return nil }
         return location
+    }
+}
+
+/// Detects the meeting link on first use, so events that are never shown skip the regex scan.
+private final class MeetingSource: Equatable, Sendable {
+    let url: URL?
+    let location: String?
+    let notes: String?
+    private let detected = Mutex<MeetingLink??>(nil)
+
+    init(url: URL?, location: String?, notes: String?) {
+        self.url = url
+        self.location = location
+        self.notes = notes
+    }
+
+    var link: MeetingLink? {
+        detected.withLock { detected in
+            if let detected { return detected }
+            let link = MeetingLinks.detect(url: url, location: location, notes: notes)
+            detected = .some(link)
+            return link
+        }
+    }
+
+    static func == (lhs: MeetingSource, rhs: MeetingSource) -> Bool {
+        lhs.url == rhs.url && lhs.location == rhs.location && lhs.notes == rhs.notes
     }
 }
 

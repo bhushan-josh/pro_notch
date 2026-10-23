@@ -65,7 +65,7 @@ final class MusicBackend: PollingBackend {
         publish(track)
     }
 
-    override func artwork(for track: TrackSnapshot) async -> NSImage? {
+    override func artworkData(for track: TrackSnapshot) async -> Data? {
         let script = """
         if application id "com.apple.Music" is running then
             tell application id "com.apple.Music"
@@ -87,8 +87,7 @@ final class MusicBackend: PollingBackend {
         guard let descriptor = try? await AppleScriptRunner.run(script),
               descriptor.string(1) == track.title, descriptor.string(2) == track.artist,
               let data = descriptor.item(3)?.data else { return nil }
-        guard !data.isEmpty, let image = NSImage(data: data), image.isValid else { return nil }
-        return image
+        return data.isEmpty ? nil : data
     }
 
     override func send(_ command: MediaCommand) {
@@ -98,12 +97,6 @@ final class MusicBackend: PollingBackend {
         case .togglePlayPause:
             body = "playpause"
             optimistic { $0.isPlaying.toggle() }
-        case .play:
-            body = "play"
-            optimistic { $0.isPlaying = true }
-        case .pause:
-            body = "pause"
-            optimistic { $0.isPlaying = false }
         case .next:
             body = "next track"
         case .previous:

@@ -34,6 +34,7 @@ public final class BrightnessManager {
     @ObservationIgnored private var samples: [(time: Date, value: Double)] = []
     @ObservationIgnored private var screenObserver: NSObjectProtocol?
     @ObservationIgnored private var rampTask: Task<Void, Never>?
+    @ObservationIgnored private var lastApplied: Double = 0
 
     @ObservationIgnored fileprivate static weak var active: BrightnessManager?
 
@@ -67,14 +68,15 @@ public final class BrightnessManager {
 
     /// DisplayServicesSetBrightnessSmooth reports success but leaves the panel unchanged on macOS 27,
     /// so the ramp is done here with the plain setter.
-    public func setBrightness(_ value: Double, smooth: Bool = true) {
+    public func setBrightness(_ value: Double) {
         guard let functions, isAvailable else { return }
         let target = min(max(value, 0), 1)
-        let start = read() ?? brightness
+        let start = rampTask != nil ? lastApplied : (read() ?? brightness)
         brightness = target
         rampTask?.cancel()
-        ownChangeUntil = Date().addingTimeInterval(smooth ? 0.5 : 0.2)
-        guard smooth, abs(target - start) > 0.001 else {
+        rampTask = nil
+        ownChangeUntil = Date().addingTimeInterval(0.5)
+        guard abs(target - start) > 0.001 else {
             apply(target, with: functions)
             return
         }
@@ -87,14 +89,13 @@ public final class BrightnessManager {
                 self.apply(start + (target - start) * eased, with: functions)
                 if step < steps { try? await Task.sleep(for: .milliseconds(16)) }
             }
+            self?.rampTask = nil
         }
     }
 
     private func apply(_ value: Double, with functions: Functions) {
-        let status = functions.set(displayID, Float(value))
-        if status != 0 {
-            hudLog.error("brightness set failed \(value, privacy: .public) status=\(status, privacy: .public)")
-        }
+        _ = functions.set(displayID, Float(value))
+        lastApplied = value
     }
 
     func read() -> Double? {
@@ -105,16 +106,13 @@ public final class BrightnessManager {
     }
 
     private func selectDisplay() {
-        guard let functions else {
-            hudLog.error("DisplayServices functions unavailable")
-            return
-        }
+        guard let functions else { return }
         let target = Self.builtInDisplayID() ?? CGMainDisplayID()
         let canChange = functions.canChange?(target) ?? true
         displayID = target
-        isAvailable = canChange && read() != nil
-        if let value = read() { brightness = value }
-        hudLog.notice("brightness display=\(target, privacy: .public) loaded=\(true, privacy: .public) canChange=\(canChange, privacy: .public) read=\(self.read() ?? -1, privacy: .public)")
+        let value = read()
+        isAvailable = canChange && value != nil
+        if let value { brightness = value }
         if isAvailable, registeredDisplay != target {
             unregister()
             if let register = functions.register, register(target, nil, brightnessChangeCallback) == 0 {
@@ -132,9 +130,9 @@ public final class BrightnessManager {
     }
 
     fileprivate func systemChanged() {
-        guard let value = read() else { return }
         let now = Date()
         if now < ownChangeUntil { return }
+        guard let value = read() else { return }
         let previous = brightness
         brightness = value
         samples.append((now, value))

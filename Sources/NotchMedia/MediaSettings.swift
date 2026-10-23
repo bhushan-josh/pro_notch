@@ -121,20 +121,29 @@ public enum MediaSettings {
 @MainActor
 final class SettingsWatcher {
     private var observer: NSObjectProtocol?
-    private var signature: [String]
+    private var signature: [NSObject?]
+    private var isCheckScheduled = false
 
     init(_ names: [String], _ handler: @escaping @MainActor () -> Void) {
-        let read = { names.map { String(describing: Defaults.store.object(forKey: $0) ?? "-") } }
+        let read = { names.map { Defaults.store.object(forKey: $0) as? NSObject } }
         signature = read()
         observer = NotificationCenter.default.addObserver(
             forName: UserDefaults.didChangeNotification, object: nil, queue: .main
         ) { [weak self] _ in
             MainActor.assumeIsolated {
-                guard let self else { return }
-                let current = read()
-                guard current != self.signature else { return }
-                self.signature = current
-                handler()
+                // Writes often arrive in bursts; compare once per run loop turn.
+                guard let self, !self.isCheckScheduled else { return }
+                self.isCheckScheduled = true
+                DispatchQueue.main.async { [weak self] in
+                    MainActor.assumeIsolated {
+                        guard let self else { return }
+                        self.isCheckScheduled = false
+                        let current = read()
+                        guard current != self.signature else { return }
+                        self.signature = current
+                        handler()
+                    }
+                }
             }
         }
     }

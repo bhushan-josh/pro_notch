@@ -95,7 +95,7 @@ final class NotchWindowController {
         var behavior: NSWindow.CollectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
         behavior.insert(Defaults[CoreSettings.hideInMissionControl] ? .transient : .stationary)
         panel.collectionBehavior = behavior
-        updateFullscreenState()
+        applyFullscreen(NotchManager.shared.fullscreenDisplays)
     }
 
     private func applyLockScreenPresence() {
@@ -125,15 +125,6 @@ final class NotchWindowController {
             return consumed ? nil : event
         }) { monitors.append(scroll) }
 
-        let workspace = NSWorkspace.shared.notificationCenter
-        for name in [NSWorkspace.activeSpaceDidChangeNotification, NSWorkspace.didActivateApplicationNotification] {
-            observers.append(workspace.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated { self?.updateFullscreenState() }
-            })
-        }
-        observers.append(NotificationCenter.default.addObserver(forName: NSWindow.didChangeOcclusionStateNotification, object: panel, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.updateFullscreenState() }
-        })
 
         settingsObserver = Defaults.observe([
             CoreSettings.hideFromScreenCapture.name, CoreSettings.hideInMissionControl.name,
@@ -277,11 +268,8 @@ final class NotchWindowController {
         return true
     }
 
-    private func updateFullscreenState() {
-        let fullscreen = SpaceInspector.fullscreenDisplayUUIDs()
-        if SystemStatus.shared.fullscreenDisplays != fullscreen {
-            SystemStatus.shared.fullscreenDisplays = fullscreen
-        }
+    /// Called by NotchManager, which queries the window server once per space change for all displays.
+    func applyFullscreen(_ fullscreen: Set<String>) {
         let hide = Defaults[CoreSettings.hideInFullscreen] && fullscreen.contains(model.geometry.displayUUID)
         if hide != model.isHiddenForFullscreen {
             withAnimation(.easeInOut(duration: 0.2)) { model.isHiddenForFullscreen = hide }

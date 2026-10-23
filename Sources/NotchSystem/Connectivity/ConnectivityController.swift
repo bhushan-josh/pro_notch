@@ -18,6 +18,7 @@ final class ConnectivityController {
 
     @ObservationIgnored private let monitor = BluetoothMonitor()
     @ObservationIgnored private var authorizationTask: Task<Void, Never>?
+    @ObservationIgnored private var activationObserver: NSObjectProtocol?
     @ObservationIgnored private var batteryTasks: [String: Task<Void, Never>] = [:]
 
     func start() {
@@ -29,6 +30,7 @@ final class ConnectivityController {
     func stop() {
         authorizationTask?.cancel()
         authorizationTask = nil
+        removeActivationObserver()
         batteryTasks.values.forEach { $0.cancel() }
         batteryTasks.removeAll()
         monitor.stop()
@@ -36,23 +38,39 @@ final class ConnectivityController {
     }
 
     /// Touching IOBluetooth before access is granted would raise the system prompt outside onboarding.
+    /// A denial only changes in System Settings, so it is rechecked when the app is next activated.
     private func startWhenAuthorized() {
-        if BluetoothAuthorizer.status == .granted {
+        authorizationTask?.cancel()
+        authorizationTask = nil
+        switch BluetoothAuthorizer.status {
+        case .granted:
+            removeActivationObserver()
             isAuthorized = true
             monitor.start()
-            return
-        }
-        authorizationTask = Task { [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(3))
-                guard let self else { return }
-                if BluetoothAuthorizer.status == .granted {
-                    self.isAuthorized = true
-                    self.monitor.start()
-                    return
+        case .notDetermined:
+            authorizationTask = Task { [weak self] in
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .seconds(3))
+                    guard !Task.isCancelled, let self else { return }
+                    if BluetoothAuthorizer.status != .notDetermined {
+                        self.startWhenAuthorized()
+                        return
+                    }
                 }
             }
+        case .denied:
+            guard activationObserver == nil else { return }
+            activationObserver = NotificationCenter.default.addObserver(
+                forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.startWhenAuthorized() }
+            }
         }
+    }
+
+    private func removeActivationObserver() {
+        if let activationObserver { NotificationCenter.default.removeObserver(activationObserver) }
+        activationObserver = nil
     }
 
     private func info(for device: IOBluetoothDevice, address: String) -> BluetoothDeviceInfo {
@@ -88,17 +106,25 @@ final class ConnectivityController {
     }
 
     /// Buds report their levels a moment after connecting, then drift; poll briefly, then slowly.
+    /// Devices that report nothing during the burst have no battery to show, so they are left alone.
     private func watchBattery(_ device: IOBluetoothDevice, address: String, presentUpdates: Bool) {
         batteryTasks[address]?.cancel()
+        let hasBattery = devices.first { $0.id == address }.map { !$0.battery.isEmpty } ?? false
         batteryTasks[address] = Task { [weak self] in
-            let delays: [Double] = [1, 1.5, 2, 3]
+            let burst: [Double] = [1, 1.5, 2, 3]
+            var reported = hasBattery
             var index = 0
             while !Task.isCancelled {
-                let delay = index < delays.count ? delays[index] : 60
+                if index < burst.count {
+                    try? await Task.sleep(for: .seconds(burst[index]))
+                } else {
+                    guard reported else { return }
+                    try? await Task.sleep(for: .seconds(300), tolerance: .seconds(60))
+                }
                 index += 1
-                try? await Task.sleep(for: .seconds(delay))
                 guard !Task.isCancelled, let self, device.isConnected() else { return }
                 let battery = BluetoothBattery.read(device)
+                if !battery.isEmpty { reported = true }
                 guard let current = self.devices.first(where: { $0.id == address }), current.battery != battery else { continue }
                 var updated = current
                 updated.battery = battery

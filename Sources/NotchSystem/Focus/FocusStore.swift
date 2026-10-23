@@ -1,5 +1,6 @@
 import AppKit
 import NotchCore
+import os
 
 struct FocusModeConfig: Sendable, Equatable {
     var name: String?
@@ -83,12 +84,27 @@ enum FocusStore {
         (record["assertionStartDateTimestamp"] as? NSNumber)?.doubleValue ?? 0
     }
 
+    private static let configurationCache = OSAllocatedUnfairLock<(modified: Date, configs: [String: FocusModeConfig])?>(
+        initialState: nil
+    )
+
+    /// The mode list rarely changes while assertions change often, so reuse the parse until the file is rewritten.
     private static func readConfigurations() -> [String: FocusModeConfig] {
+        let modified = (try? FileManager.default.attributesOfItem(atPath: configurationsURL.path))?[.modificationDate] as? Date
+        if let modified, let cached = configurationCache.withLock({ $0 }), cached.modified == modified {
+            return cached.configs
+        }
+        guard let configs = parseConfigurations() else { return [:] }
+        if let modified { configurationCache.withLock { $0 = (modified, configs) } }
+        return configs
+    }
+
+    private static func parseConfigurations() -> [String: FocusModeConfig]? {
         guard let data = try? Data(contentsOf: configurationsURL),
               let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let stores = root["data"] as? [[String: Any]],
               let modes = stores.first?["modeConfigurations"] as? [String: Any]
-        else { return [:] }
+        else { return nil }
 
         var result: [String: FocusModeConfig] = [:]
         for (identifier, value) in modes {

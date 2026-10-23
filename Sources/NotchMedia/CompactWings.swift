@@ -91,8 +91,12 @@ struct IslandWaveform: View {
     @AppStorage(MediaSettings.useLiveWaveform) private var useLiveWaveform
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 60, paused: !isPlaying)) { context in
-            let heights = currentHeights(at: context.date)
+        // Live levels are observable and redraw on their own, so the timeline only drives the simulation.
+        let liveHeights: [CGFloat]? = isPlaying && useLiveWaveform && live.isRunning && live.hasSignal
+            ? Self.resample(live.levels, to: 4).map { 3 + 9 * min(max($0, 0), 1) }
+            : nil
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !isPlaying || liveHeights != nil)) { context in
+            let heights = liveHeights ?? Self.simulatedHeights(at: context.date)
             HStack(spacing: 1.5) {
                 ForEach(0..<4, id: \.self) { index in
                     RoundedRectangle(cornerRadius: 1, style: .continuous)
@@ -103,18 +107,29 @@ struct IslandWaveform: View {
             .frame(height: 20)
             .animation(.easeInOut(duration: 0.5), value: isPlaying)
         }
+        .onAppear { live.attach() }
+        .onDisappear { live.detach() }
     }
 
-    private func currentHeights(at date: Date) -> [CGFloat] {
-        if useLiveWaveform, live.isRunning, live.hasSignal {
-            return WaveformView.resample(live.levels, to: 4).map { 3 + 9 * min(max($0, 0), 1) }
-        }
+    private static func simulatedHeights(at date: Date) -> [CGFloat] {
         let t = date.timeIntervalSinceReferenceDate
-        return Self.periods.map { period in
+        return periods.map { period in
             let phase = t.truncatingRemainder(dividingBy: period) / period
             let triangle = phase < 0.5 ? phase * 2 : (1 - phase) * 2
             let eased = triangle * triangle * (3 - 2 * triangle)
             return 3 + 9 * CGFloat(eased)
+        }
+    }
+
+    private static func resample(_ levels: [CGFloat], to count: Int) -> [CGFloat] {
+        guard !levels.isEmpty else { return Array(repeating: 0, count: count) }
+        guard levels.count != count, count > 1 else { return levels }
+        return (0..<count).map { index in
+            let position = Double(index) * Double(levels.count - 1) / Double(count - 1)
+            let lower = Int(position.rounded(.down))
+            let upper = min(lower + 1, levels.count - 1)
+            let fraction = CGFloat(position - Double(lower))
+            return levels[lower] * (1 - fraction) + levels[upper] * fraction
         }
     }
 }

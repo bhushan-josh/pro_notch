@@ -38,7 +38,11 @@ final class CalendarManager {
     @ObservationIgnored private var workspaceObservers: [NSObjectProtocol] = []
     @ObservationIgnored private var settingsObserver: AnyObject?
     @ObservationIgnored private var tickTask: Task<Void, Never>?
+    @ObservationIgnored private var fetchTask: Task<Void, Never>?
+    @ObservationIgnored private var fetchDebounce: Task<Void, Never>?
     @ObservationIgnored private var fetchedRange: DateInterval?
+    @ObservationIgnored private var pendingRange: DateInterval?
+    @ObservationIgnored private var calendarsStale = false
     @ObservationIgnored private var currentDay: Date
     @ObservationIgnored private var timeZone = TimeZone.current
 
@@ -95,7 +99,7 @@ final class CalendarManager {
         ]
         workspaceObservers = [
             NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated { self?.refresh() }
+                MainActor.assumeIsolated { self?.refresh(debounced: true) }
             },
         ]
         settingsObserver = Defaults.observe([CalendarSettings.selectedCalendarIDs.name]) { [weak self] in
@@ -103,7 +107,7 @@ final class CalendarManager {
             self.selectedCalendarIDs = Defaults[CalendarSettings.selectedCalendarIDs]
             self.fetch()
         }
-        refresh()
+        refresh(debounced: false)
         startTicking()
     }
 
@@ -117,8 +121,13 @@ final class CalendarManager {
         settingsObserver = nil
         tickTask?.cancel()
         tickTask = nil
+        fetchDebounce?.cancel()
+        fetchDebounce = nil
+        fetchTask?.cancel()
+        fetchTask = nil
         eventsByDay = [:]
         fetchedRange = nil
+        pendingRange = nil
     }
 
     private func startTicking() {
@@ -127,7 +136,7 @@ final class CalendarManager {
             while !Task.isCancelled {
                 let reference = Date().timeIntervalSinceReferenceDate
                 let nextMinute = (reference / 60).rounded(.down) * 60 + 60.25
-                try? await Task.sleep(for: .seconds(nextMinute - reference))
+                try? await Task.sleep(for: .seconds(nextMinute - reference), tolerance: .seconds(1))
                 guard !Task.isCancelled, let self else { return }
                 self.tick()
             }
@@ -141,9 +150,8 @@ final class CalendarManager {
             let wasShowingToday = selectedDay == currentDay
             currentDay = day
             loadDismissed()
-            fetchedRange = nil
             if wasShowingToday { selectedDay = day }
-            if fetchedRange == nil { fetch() }
+            scheduleFetch()
             return
         }
         onUpdate?()
@@ -159,19 +167,19 @@ final class CalendarManager {
            day != selectedDay {
             selectedDay = day
         }
-        refresh()
+        refresh(debounced: true)
     }
 
-    func refresh() {
+    private func refresh(debounced: Bool) {
         now = Date()
         refreshAuthorizationStatus()
         tick()
-        fetch()
+        if debounced { scheduleFetch() } else { fetch() }
     }
 
     private func storeChanged() {
-        reloadCalendars()
-        fetch()
+        calendarsStale = true
+        scheduleFetch()
     }
 
     // MARK: Authorization
@@ -299,12 +307,31 @@ final class CalendarManager {
     }
 
     private func isFetched(_ day: Date) -> Bool {
-        guard let fetchedRange else { return false }
+        guard let range = pendingRange ?? fetchedRange else { return false }
         let wanted = fetchInterval(for: day)
-        return fetchedRange.start <= wanted.start && fetchedRange.end >= wanted.end
+        return range.start <= wanted.start && range.end >= wanted.end
+    }
+
+    /// Store changes arrive in bursts during sync and a wake can also roll the day over, so they share one fetch.
+    private func scheduleFetch() {
+        fetchDebounce?.cancel()
+        fetchDebounce = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(750))
+            guard !Task.isCancelled, let self else { return }
+            self.fetch()
+        }
     }
 
     func fetch() {
+        fetchDebounce?.cancel()
+        fetchDebounce = nil
+        fetchTask?.cancel()
+        fetchTask = nil
+        pendingRange = nil
+        if calendarsStale {
+            calendarsStale = false
+            reloadCalendars()
+        }
         guard isRunning, authorization == .granted else {
             eventsByDay = [:]
             fetchedRange = nil
@@ -313,17 +340,37 @@ final class CalendarManager {
         }
         let interval = fetchInterval(for: selectedDay)
         let chosen = selectedCalendars
+        let predicate = chosen?.isEmpty == true
+            ? nil
+            : store.predicateForEvents(withStart: interval.start, end: interval.end, calendars: chosen)
+        let store = store
+        let calendar = calendar
+        pendingRange = interval
+        fetchTask = Task { [weak self] in
+            let grouped = await Task.detached(priority: .userInitiated) {
+                Self.loadEvents(matching: predicate, from: store, in: interval, calendar: calendar)
+            }.value
+            guard !Task.isCancelled, let self else { return }
+            self.pendingRange = nil
+            self.fetchTask = nil
+            self.fetchedRange = interval
+            if grouped != self.eventsByDay { self.eventsByDay = grouped }
+            self.onUpdate?()
+        }
+    }
+
+    private nonisolated static func loadEvents(
+        matching predicate: NSPredicate?, from store: EKEventStore, in interval: DateInterval, calendar: Calendar
+    ) -> [Date: [CalendarEvent]] {
+        guard let predicate else { return [:] }
         var grouped: [Date: [CalendarEvent]] = [:]
-        if chosen?.isEmpty != true {
-            let predicate = store.predicateForEvents(withStart: interval.start, end: interval.end, calendars: chosen)
-            for ekEvent in store.events(matching: predicate) where Self.shouldShow(ekEvent) {
-                let event = CalendarEvent(ekEvent)
-                var day = max(calendar.startOfDay(for: event.start), interval.start)
-                repeat {
-                    grouped[day, default: []].append(event)
-                    day = calendar.addingDays(1, to: day)
-                } while day < event.end && day < interval.end
-            }
+        for ekEvent in store.events(matching: predicate) where shouldShow(ekEvent) {
+            let event = CalendarEvent(ekEvent)
+            var day = max(calendar.startOfDay(for: event.start), interval.start)
+            repeat {
+                grouped[day, default: []].append(event)
+                day = calendar.addingDays(1, to: day)
+            } while day < event.end && day < interval.end
         }
         for key in grouped.keys {
             grouped[key]?.sort { lhs, rhs in
@@ -331,12 +378,10 @@ final class CalendarManager {
                 return lhs.start == rhs.start ? lhs.title < rhs.title : lhs.start < rhs.start
             }
         }
-        fetchedRange = interval
-        if grouped != eventsByDay { eventsByDay = grouped }
-        onUpdate?()
+        return grouped
     }
 
-    private static func shouldShow(_ event: EKEvent) -> Bool {
+    private nonisolated static func shouldShow(_ event: EKEvent) -> Bool {
         if event.status == .canceled { return false }
         if let me = event.attendees?.first(where: \.isCurrentUser), me.participantStatus == .declined { return false }
         return true

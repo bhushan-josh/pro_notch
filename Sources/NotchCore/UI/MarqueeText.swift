@@ -22,7 +22,7 @@ public struct MarqueeText: View {
         let overflow = textWidth > containerWidth + 1
         let gap: CGFloat = 32
         GeometryReader { proxy in
-            TimelineView(.animation(paused: !overflow)) { context in
+            TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !overflow)) { context in
                 let cycle = Double(textWidth + gap) / speed
                 let total = cycle + pause
                 let t = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: total)

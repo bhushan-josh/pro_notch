@@ -26,6 +26,8 @@ public final class PageSizeStore {
     public static let shared = PageSizeStore()
 
     private var sizes: [String: CGSize] = [:]
+    /// Parsed UserDefaults values; looked up on every open-island render.
+    @ObservationIgnored private var stored: [String: CGSize?] = [:]
 
     private init() {}
 
@@ -33,10 +35,11 @@ public final class PageSizeStore {
 
     public func size(for pageID: String) -> CGSize? {
         if let size = sizes[pageID] { return size }
-        guard let stored = Defaults.store.string(forKey: Self.key(pageID)) else { return nil }
-        let parts = stored.split(separator: ",").compactMap { Double($0) }
-        guard parts.count == 2 else { return nil }
-        return CGSize(width: parts[0], height: parts[1])
+        if let cached = stored[pageID] { return cached }
+        let parts = Defaults.store.string(forKey: Self.key(pageID))?.split(separator: ",").compactMap { Double($0) } ?? []
+        let size = parts.count == 2 ? CGSize(width: parts[0], height: parts[1]) : nil
+        stored[pageID] = size
+        return size
     }
 
     func setLive(_ size: CGSize, for pageID: String) {
@@ -50,6 +53,7 @@ public final class PageSizeStore {
 
     public func reset(_ pageID: String) {
         sizes.removeValue(forKey: pageID)
+        stored[pageID] = .some(nil)
         Defaults.store.removeObject(forKey: Self.key(pageID))
     }
 }

@@ -58,8 +58,6 @@ public final class OverlaySpace {
         guard windowNumbers.remove(number) != nil else { return }
         CGSRemoveWindowsFromSpaces(connection, [NSNumber(value: number)] as CFArray, [NSNumber(value: space)] as CFArray)
     }
-
-    public func contains(_ window: NSWindow) -> Bool { windowNumbers.contains(window.windowNumber) }
 }
 
 public enum SpaceInspector {

@@ -1,7 +1,7 @@
 import Foundation
 
 /// Watches the Focus database directory and file, with a slow poll as a fallback
-/// for when the watchers cannot be opened (no Full Disk Access yet) or miss an atomic replace.
+/// for when the watchers cannot be opened (no Full Disk Access yet).
 @MainActor
 final class FocusMonitor {
     var onReading: ((FocusReadResult) -> Void)?
@@ -11,22 +11,18 @@ final class FocusMonitor {
     private var pollTask: Task<Void, Never>?
     private var pendingReload: Task<Void, Never>?
     private var readGeneration = 0
+    private var isRunning = false
+    private var hasAccess = true
 
     func start() {
-        guard pollTask == nil else { return }
+        guard !isRunning else { return }
+        isRunning = true
         installWatchers()
         reload()
-        pollTask = Task { [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(5))
-                guard let self else { return }
-                self.installWatchers()
-                self.reload()
-            }
-        }
     }
 
     func stop() {
+        isRunning = false
         pollTask?.cancel()
         pollTask = nil
         pendingReload?.cancel()
@@ -37,6 +33,7 @@ final class FocusMonitor {
         fileSource = nil
     }
 
+    /// The directory watcher sees the assertions file appear, so a missing file needs no watcher of its own.
     private func installWatchers() {
         if directorySource == nil {
             directorySource = makeSource(path: FocusStore.directory.path, mask: [.write, .delete, .rename]) { [weak self] event in
@@ -57,6 +54,25 @@ final class FocusMonitor {
                     self.fileSource = nil
                 }
                 self.scheduleReload()
+            }
+        }
+        updatePolling()
+    }
+
+    /// The watchers may open without Full Disk Access, so keep polling until a read succeeds.
+    private func updatePolling() {
+        let watching = directorySource != nil
+            && (fileSource != nil || !FileManager.default.fileExists(atPath: FocusStore.assertionsURL.path))
+        if watching, hasAccess {
+            pollTask?.cancel()
+            pollTask = nil
+        } else if isRunning, pollTask == nil {
+            pollTask = Task { [weak self] in
+                try? await Task.sleep(for: .seconds(30), tolerance: .seconds(5))
+                guard !Task.isCancelled, let self else { return }
+                self.pollTask = nil
+                self.installWatchers()
+                self.reload()
             }
         }
     }
@@ -94,6 +110,8 @@ final class FocusMonitor {
         Task { [weak self] in
             let reading = await Task.detached(priority: .utility) { FocusStore.read() }.value
             guard let self, generation == self.readGeneration else { return }
+            self.hasAccess = reading != .noAccess
+            self.updatePolling()
             self.onReading?(reading)
         }
     }

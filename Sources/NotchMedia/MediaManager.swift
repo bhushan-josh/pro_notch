@@ -1,4 +1,5 @@
 import AppKit
+import ImageIO
 import NotchCore
 import Observation
 import SwiftUI
@@ -17,6 +18,7 @@ public final class MediaManager {
     /// Two colors sampled from the artwork's top and bottom halves.
     private(set) var artworkGradient: [Color]?
     private(set) var appIcon: NSImage?
+    private(set) var sourceAppName = "App"
     /// Bumps on every meaningful change; feeds the idle provider's "most recent" ordering.
     private(set) var lastChangeAt = Date()
     /// The paused activity has outlived `nowPlaying.idleDuration`.
@@ -40,10 +42,9 @@ public final class MediaManager {
     @ObservationIgnored private var artworkTask: Task<Void, Never>?
     @ObservationIgnored private var artworkKey: String?
     @ObservationIgnored private var artworkCache: [String: (image: NSImage, color: Color?, gradient: [Color]?)] = [:]
-    @ObservationIgnored private var iconCache: [String: NSImage] = [:]
+    @ObservationIgnored private var appCache: [String: (icon: NSImage?, name: String)] = [:]
     @ObservationIgnored private var lastIdentity: String?
     @ObservationIgnored private var lastPlaying = false
-    @ObservationIgnored private var lastUsedBundleID: String?
 
     private var backends: [MediaBackend] { [music, spotify, system, browser] }
 
@@ -154,7 +155,6 @@ public final class MediaManager {
             lastChangeAt = Date()
             updateAppIcon(bundleID: new?.bundleID)
             if let new, let backend {
-                lastUsedBundleID = new.bundleID ?? lastUsedBundleID
                 loadArtwork(for: new, from: backend)
                 if previous != nil || new.isPlaying { onTrackChange?(new) }
             } else {
@@ -216,51 +216,39 @@ public final class MediaManager {
         artworkTask?.cancel()
         let identity = track.identity
         artworkTask = Task { [weak self] in
-            var image = await backend.artwork(for: track)
-            if image == nil, track.bundleID == MusicBackend.bundleID,
+            var decoded = await DecodedArtwork.decode(backend.artworkData(for: track))
+            if decoded == nil, track.bundleID == MusicBackend.bundleID,
                let url = await ITunesLookup.lookup(title: track.title, artist: track.artist)?.artworkURL {
-                image = await ArtworkLoader.image(from: url)
+                decoded = await DecodedArtwork.decode(ArtworkLoader.data(from: url))
             }
             guard let self, !Task.isCancelled, self.artworkKey == key else { return }
-            if image == nil, self.artworkCache[identity] != nil { return }
-            let small = image.map(Self.thumbnail(of:))
-            let color = small.flatMap(ImageColors.dominantColor(of:))
-            let gradient = small.flatMap(ImageColors.gradientColors(of:))
+            if decoded == nil, self.artworkCache[identity] != nil { return }
+            let image = decoded.map { NSImage(cgImage: $0.image, size: NSSize(width: $0.image.width, height: $0.image.height)) }
             if let image {
                 if self.artworkCache.count > 40 { self.artworkCache.removeAll() }
-                self.artworkCache[identity] = (image, color, gradient)
+                self.artworkCache[identity] = (image, decoded?.color, decoded?.gradient)
             }
             self.artwork = image
-            self.artworkColor = color
-            self.artworkGradient = gradient
+            self.artworkColor = decoded?.color
+            self.artworkGradient = decoded?.gradient
         }
-    }
-
-    private static func thumbnail(of image: NSImage) -> NSImage {
-        let size = NSSize(width: 32, height: 32)
-        let small = NSImage(size: size)
-        small.lockFocus()
-        image.draw(in: NSRect(origin: .zero, size: size), from: .zero, operation: .copy, fraction: 1)
-        small.unlockFocus()
-        return small
     }
 
     private func updateAppIcon(bundleID: String?) {
         guard let bundleID else {
             appIcon = nil
+            sourceAppName = "App"
             return
         }
-        if let cached = iconCache[bundleID] {
-            appIcon = cached
-            return
+        if appCache[bundleID] == nil {
+            let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)
+            appCache[bundleID] = (
+                url.map { NSWorkspace.shared.icon(forFile: $0.path) },
+                url.map { FileManager.default.displayName(atPath: $0.path).replacingOccurrences(of: ".app", with: "") } ?? "App"
+            )
         }
-        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else {
-            appIcon = nil
-            return
-        }
-        let icon = NSWorkspace.shared.icon(forFile: url.path)
-        iconCache[bundleID] = icon
-        appIcon = icon
+        appIcon = appCache[bundleID]?.icon
+        sourceAppName = appCache[bundleID]?.name ?? "App"
     }
 
     // MARK: Derived state
@@ -277,12 +265,6 @@ public final class MediaManager {
     var artist: String { track?.artist ?? "" }
     var album: String { track?.album ?? "" }
 
-    var sourceAppName: String {
-        let bundleID = track?.bundleID ?? preferredAppBundleID
-        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return "App" }
-        return FileManager.default.displayName(atPath: url.path).replacingOccurrences(of: ".app", with: "")
-    }
-
     /// Whether the closed notch should show the now-playing idle activity.
     var showsIdleActivity: Bool {
         _ = settingsRevision
@@ -294,22 +276,6 @@ public final class MediaManager {
     var isSourceAppFrontmost: Bool {
         guard let bundleID = track?.bundleID else { return false }
         return bundleID == frontmostBundleID
-    }
-
-    /// The app the empty state offers to open.
-    var preferredAppBundleID: String {
-        switch Defaults[MediaSettings.mediaSource] {
-        case .spotify: return SpotifyBackend.bundleID
-        case .music: return MusicBackend.bundleID
-        default:
-            if let last = lastUsedBundleID, NSWorkspace.shared.urlForApplication(withBundleIdentifier: last) != nil { return last }
-            return Self.defaultBrowserBundleID ?? BrowserBackend.Browser.chrome.rawValue
-        }
-    }
-
-    private static var defaultBrowserBundleID: String? {
-        guard let url = NSWorkspace.shared.urlForApplication(toOpen: URL(string: "https://example.com")!) else { return nil }
-        return Bundle(url: url)?.bundleIdentifier
     }
 
     func supports(_ capability: MediaCapability) -> Bool { capabilities.contains(capability) }
@@ -365,7 +331,7 @@ public final class MediaManager {
             browser.revealActiveTab()
             return
         }
-        open(bundleID: track?.bundleID ?? preferredAppBundleID)
+        if let bundleID = track?.bundleID { open(bundleID: bundleID) }
     }
 
     func showInApp() {
@@ -399,5 +365,36 @@ public final class MediaManager {
         let parts = link.pathComponents.filter { $0 != "/" }
         guard parts.count >= 2 else { return nil }
         return URL(string: "spotify:" + parts.joined(separator: ":"))
+    }
+}
+
+/// Artwork decoded, downsampled and color-sampled off the main actor.
+private struct DecodedArtwork: @unchecked Sendable {
+    var image: CGImage
+    var color: Color?
+    var gradient: [Color]?
+
+    static func decode(_ data: Data?) async -> DecodedArtwork? {
+        guard let data, !data.isEmpty else { return nil }
+        return await Task.detached(priority: .utility) {
+            guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+                  let image = thumbnail(source, maxPixels: 300) else { return nil }
+            let small = thumbnail(source, maxPixels: 32).map { NSImage(cgImage: $0, size: NSSize(width: $0.width, height: $0.height)) }
+            return DecodedArtwork(
+                image: image,
+                color: small.flatMap(ImageColors.dominantColor(of:)),
+                gradient: small.flatMap(ImageColors.gradientColors(of:))
+            )
+        }.value
+    }
+
+    private static func thumbnail(_ source: CGImageSource, maxPixels: Int) -> CGImage? {
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixels,
+        ]
+        return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
     }
 }

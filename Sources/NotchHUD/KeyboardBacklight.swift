@@ -32,25 +32,22 @@ public final class KeyboardBacklight {
         else { return }
         let instance = type.init()
         guard instance.responds(to: Self.getSelector), instance.responds(to: Self.setSelector) else { return }
-        client = instance
-        getLevel = unsafeBitCast(instance.method(for: Self.getSelector), to: GetLevel.self)
-        setLevel = unsafeBitCast(instance.method(for: Self.setSelector), to: SetLevel.self)
         if instance.responds(to: Self.idsSelector) {
             let copyIDs = unsafeBitCast(instance.method(for: Self.idsSelector), to: CopyIDs.self)
             let ids = copyIDs(instance, Self.idsSelector)?.takeRetainedValue() as? [NSNumber] ?? []
             guard let first = ids.first else { return }
             keyboardID = first.uint64Value
         }
+        client = instance
+        getLevel = unsafeBitCast(instance.method(for: Self.getSelector), to: GetLevel.self)
+        setLevel = unsafeBitCast(instance.method(for: Self.setSelector), to: SetLevel.self)
         isAvailable = true
         refresh()
     }
 
-    @discardableResult
-    func refresh() -> Double? {
-        guard let client, let getLevel else { return nil }
-        let value = Double(min(max(getLevel(client, Self.getSelector, keyboardID), 0), 1))
-        level = value
-        return value
+    func refresh() {
+        guard let client, let getLevel else { return }
+        level = Double(min(max(getLevel(client, Self.getSelector, keyboardID), 0), 1))
     }
 
     public func setLevel(_ value: Double) {

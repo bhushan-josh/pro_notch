@@ -8,6 +8,9 @@ public final class NotchManager {
 
     private var controllers: [String: NotchWindowController] = [:]
     private var screenObserver: NSObjectProtocol?
+    private var spaceObservers: [NSObjectProtocol] = []
+    /// Display UUIDs currently showing a fullscreen app.
+    private(set) var fullscreenDisplays: Set<String> = []
     private var settingsObserver: AnyObject?
 
     private init() {}
@@ -16,7 +19,14 @@ public final class NotchManager {
         NotchRegistry.shared.register(page: NotchPage(id: NotchModel.homePageID, title: "Home", symbol: "house.fill", order: 0) {
             HomePageView()
         })
+        fullscreenDisplays = SpaceInspector.fullscreenDisplayUUIDs()
         rebuild()
+        let workspace = NSWorkspace.shared.notificationCenter
+        for name in [NSWorkspace.activeSpaceDidChangeNotification, NSWorkspace.didActivateApplicationNotification] {
+            spaceObservers.append(workspace.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.updateFullscreen() }
+            })
+        }
         screenObserver = NotchCenterObserver.screenParameters { [weak self] in self?.rebuild() }
         settingsObserver = Defaults.observe([CoreSettings.displayTarget.name, CoreSettings.specificDisplayUUID.name]) { [weak self] in
             self?.rebuild()
@@ -30,6 +40,11 @@ public final class NotchManager {
     }
 
     public var models: [NotchModel] { controllers.values.map(\.model) }
+
+    private func updateFullscreen() {
+        fullscreenDisplays = SpaceInspector.fullscreenDisplayUUIDs()
+        controllers.values.forEach { $0.applyFullscreen(fullscreenDisplays) }
+    }
 
     public func closeAll() { models.forEach { $0.close() } }
 

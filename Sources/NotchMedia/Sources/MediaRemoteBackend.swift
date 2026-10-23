@@ -18,7 +18,7 @@ final class MediaRemoteBackend: MediaBackend {
     private typealias SetModeFn = @convention(c) (Int32) -> Void
 
     private enum Command: Int32 {
-        case play = 0, pause = 1, togglePlayPause = 2, nextTrack = 4, previousTrack = 5
+        case togglePlayPause = 2, nextTrack = 4, previousTrack = 5
     }
 
     private struct Functions {
@@ -67,8 +67,6 @@ final class MediaRemoteBackend: MediaBackend {
     /// True once the service has delivered real info at least once; false suggests it is withholding data.
     private(set) var isDelivering = false
 
-    var isAvailable: Bool { Self.functions != nil }
-
     init() { super.init(kind: .system) }
 
     override var capabilities: Set<MediaCapability> {
@@ -98,7 +96,11 @@ final class MediaRemoteBackend: MediaBackend {
             })
         }
         refresh()
-        // Notifications cover most changes; a slow poll catches seeks made inside the player.
+    }
+
+    /// A slow poll catches seeks made inside the player; it waits for real data since a withholding service only errors.
+    private func startPollingIfDelivering() {
+        guard isDelivering, isRunning, pollTask == nil else { return }
         pollTask = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(4))
@@ -155,6 +157,7 @@ final class MediaRemoteBackend: MediaBackend {
             return
         }
         isDelivering = true
+        startPollingIfDelivering()
         var track = TrackSnapshot()
         track.title = title
         track.artist = value("Artist") ?? ""
@@ -199,12 +202,6 @@ final class MediaRemoteBackend: MediaBackend {
         case .togglePlayPause:
             _ = functions.sendCommand?(Command.togglePlayPause.rawValue, nil)
             optimistic { $0.isPlaying.toggle() }
-        case .play:
-            _ = functions.sendCommand?(Command.play.rawValue, nil)
-            optimistic { $0.isPlaying = true }
-        case .pause:
-            _ = functions.sendCommand?(Command.pause.rawValue, nil)
-            optimistic { $0.isPlaying = false }
         case .next:
             _ = functions.sendCommand?(Command.nextTrack.rawValue, nil)
         case .previous:

@@ -74,12 +74,6 @@ final class SpotifyBackend: PollingBackend {
         case .togglePlayPause:
             body = "playpause"
             optimistic { $0.isPlaying.toggle() }
-        case .play:
-            body = "play"
-            optimistic { $0.isPlaying = true }
-        case .pause:
-            body = "pause"
-            optimistic { $0.isPlaying = false }
         case .next:
             body = "next track"
         case .previous:

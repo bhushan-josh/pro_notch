@@ -13,6 +13,8 @@ final class TimeToLeave: NSObject, CLLocationManagerDelegate {
         var travelTime: TimeInterval?
         var destination: MKMapItem?
         var transport: CalendarTransport
+        var origin: CLLocation
+        var place: String?
         var computedAt: Date
     }
 
@@ -29,6 +31,9 @@ final class TimeToLeave: NSObject, CLLocationManagerDelegate {
 
     private static let estimateLifetime: TimeInterval = 10 * 60
     private static let horizon: TimeInterval = 4 * 3600
+    /// Stale estimates are only refreshed once the leave time is this close, or after the origin moved.
+    private static let refreshWindow: TimeInterval = 45 * 60
+    private static let originTolerance: CLLocationDistance = 500
 
     init(manager: CalendarManager) {
         self.manager = manager
@@ -115,7 +120,9 @@ final class TimeToLeave: NSObject, CLLocationManagerDelegate {
             return until > 0 && until <= Self.horizon && !manager.isDismissed(event)
                 && (event.coordinate != nil || event.travelDestination != nil)
         }
-        notified.formIntersection(Set(candidates.map(\.id)))
+        let ids = Set(candidates.map(\.id))
+        notified.formIntersection(ids)
+        estimates = estimates.filter { ids.contains($0.key) }
         guard !candidates.isEmpty else { return }
 
         requestLocationIfStale(now)
@@ -124,8 +131,8 @@ final class TimeToLeave: NSObject, CLLocationManagerDelegate {
         let transport = Defaults[CalendarSettings.transport]
         let buffer = TimeInterval(max(0, Defaults[CalendarSettings.timeToLeaveBuffer])) * 60
         for event in candidates {
-            if let estimate = estimates[event.id], estimate.transport == transport,
-               now.timeIntervalSince(estimate.computedAt) < Self.estimateLifetime {
+            if let estimate = estimates[event.id],
+               !needsRefresh(estimate, for: event, from: origin, transport: transport, buffer: buffer, now: now) {
                 guard let travelTime = estimate.travelTime else { continue }
                 let leaveAt = event.start.addingTimeInterval(-travelTime - buffer)
                 if now >= leaveAt, notified.insert(event.id).inserted {
@@ -143,6 +150,18 @@ final class TimeToLeave: NSObject, CLLocationManagerDelegate {
         }
     }
 
+    private func needsRefresh(
+        _ estimate: Estimate, for event: CalendarEvent, from origin: CLLocation,
+        transport: CalendarTransport, buffer: TimeInterval, now: Date
+    ) -> Bool {
+        if estimate.transport != transport || estimate.place != event.location
+            || estimate.origin.distance(from: origin) > Self.originTolerance { return true }
+        guard now.timeIntervalSince(estimate.computedAt) >= Self.estimateLifetime else { return false }
+        guard let travelTime = estimate.travelTime else { return true }
+        let leaveAt = event.start.addingTimeInterval(-travelTime - buffer)
+        return leaveAt.timeIntervalSince(now) <= Self.refreshWindow
+    }
+
     private func requestLocationIfStale(_ now: Date) {
         let fresh = lastLocation.map { now.timeIntervalSince($0.timestamp) < 15 * 60 } ?? false
         let recentlyAsked = lastLocationRequest.map { now.timeIntervalSince($0) < 60 } ?? false
@@ -154,7 +173,9 @@ final class TimeToLeave: NSObject, CLLocationManagerDelegate {
     // MARK: Estimating
 
     private func estimate(_ event: CalendarEvent, from origin: CLLocation, transport: CalendarTransport) async -> Estimate {
-        var estimate = Estimate(travelTime: nil, destination: nil, transport: transport, computedAt: Date())
+        var estimate = Estimate(
+            travelTime: nil, destination: nil, transport: transport, origin: origin, place: event.location, computedAt: Date()
+        )
         guard let destination = await destination(for: event, near: origin) else { return estimate }
         estimate.destination = destination
         let request = MKDirections.Request()

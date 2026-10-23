@@ -7,6 +7,7 @@ import Observation
 import os
 
 /// Publishes live per-band output levels for the waveform, captured with a Core Audio process tap.
+/// The tap runs only while it is wanted (setting on, music playing) and a waveform that uses it is on screen.
 @MainActor
 @Observable
 final class LiveWaveform {
@@ -23,11 +24,36 @@ final class LiveWaveform {
     @ObservationIgnored private var stopTask: Task<Void, Never>?
     @ObservationIgnored private var silentSince: Date?
     @ObservationIgnored private var failedAt: Date?
+    @ObservationIgnored private var wanted = false
+    @ObservationIgnored private var viewers = 0
+    @ObservationIgnored private var deviceListener: AudioObjectPropertyListenerBlock?
+    @ObservationIgnored private var restartTask: Task<Void, Never>?
+
+    private static let outputAddresses = [kAudioHardwarePropertyDefaultOutputDevice, kAudioHardwarePropertyDefaultSystemOutputDevice].map {
+        AudioObjectPropertyAddress(mSelector: $0, mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+    }
 
     private init() {}
 
     func setWanted(_ wanted: Bool) {
-        if wanted {
+        self.wanted = wanted
+        update()
+    }
+
+    func attach() {
+        viewers += 1
+        update()
+    }
+
+    func detach() {
+        viewers = max(0, viewers - 1)
+        update()
+    }
+
+    private var isNeeded: Bool { wanted && viewers > 0 }
+
+    private func update() {
+        if isNeeded {
             stopTask?.cancel()
             stopTask = nil
             startIfNeeded()
@@ -46,7 +72,7 @@ final class LiveWaveform {
         let wasRunning = isRunning
         startIfNeeded(force: true)
         try? await Task.sleep(for: .seconds(3))
-        if !wasRunning, !(Defaults[MediaSettings.useLiveWaveform] && MediaManager.shared.isPlaying) { stopNow() }
+        if !wasRunning, !isNeeded { stopNow() }
     }
 
     private func startIfNeeded(force: Bool = false) {
@@ -63,6 +89,7 @@ final class LiveWaveform {
         self.capture = capture
         isRunning = true
         silentSince = Date()
+        observeOutputDevice()
         publishTask = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(33))
@@ -75,11 +102,54 @@ final class LiveWaveform {
         stopTask = nil
         publishTask?.cancel()
         publishTask = nil
+        stopObservingOutputDevice()
         capture?.stop()
         capture = nil
         isRunning = false
         hasSignal = false
         levels = []
+    }
+
+    /// The aggregate device is bound to the output at creation, so switching output (e.g. to AirPods) needs a new one.
+    private func observeOutputDevice() {
+        guard deviceListener == nil else { return }
+        let listener: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
+            MainActor.assumeIsolated { self?.scheduleRestart() }
+        }
+        for var address in Self.outputAddresses {
+            AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &address, .main, listener)
+        }
+        deviceListener = listener
+    }
+
+    private func stopObservingOutputDevice() {
+        restartTask?.cancel()
+        restartTask = nil
+        guard let listener = deviceListener else { return }
+        for var address in Self.outputAddresses {
+            AudioObjectRemovePropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &address, .main, listener)
+        }
+        deviceListener = nil
+    }
+
+    private func scheduleRestart() {
+        restartTask?.cancel()
+        // A device switch fires several changes in a row; rebuild once they settle.
+        restartTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(500))
+            guard !Task.isCancelled, let self, self.isRunning else { return }
+            self.restartTask = nil
+            self.capture?.stop()
+            let capture = AudioTapCapture(bands: Self.bandCount)
+            do {
+                try capture.start()
+                self.capture = capture
+            } catch {
+                NSLog("Dynamic Notch live waveform unavailable: \(error)")
+                self.failedAt = Date()
+                self.stopNow()
+            }
+        }
     }
 
     private func publish() {

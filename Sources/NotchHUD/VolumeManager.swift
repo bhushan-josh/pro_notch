@@ -20,6 +20,8 @@ public final class VolumeManager {
     @ObservationIgnored private var listeners: [AudioListener] = []
     @ObservationIgnored private var boundAt = Date.distantPast
     @ObservationIgnored private var emulatedMuteRestore: Double?
+    @ObservationIgnored private var muteSettable = false
+    @ObservationIgnored private var refreshPending = false
 
     private static let channels: [AudioObjectPropertyElement] = [1, 2]
     private static let output = kAudioObjectPropertyScopeOutput
@@ -33,6 +35,10 @@ public final class VolumeManager {
         deviceID = device
         boundAt = Date()
         emulatedMuteRestore = nil
+        refreshPending = false
+        canSetVolume = isVolumeSettable
+        muteSettable = isMuteSettable
+        canMute = muteSettable || canSetVolume
         refresh()
         guard device != kAudioObjectUnknown else { return }
         var addresses = [
@@ -61,18 +67,12 @@ public final class VolumeManager {
         let changed = abs(newVolume - volume) > 0.001 || newMuted != isMuted
         volume = newVolume
         isMuted = newMuted
-        canSetVolume = volumeSettable
-        canMute = muteSettable || canSetVolume
         return changed
     }
 
     public func setVolume(_ value: Double) {
         let value = min(max(value, 0), 1)
-        guard writeVolume(value) else {
-            hudLog.error("writeVolume failed for \(value, privacy: .public)")
-            return
-        }
-        hudLog.notice("volume set \(value, privacy: .public)")
+        guard writeVolume(value) else { return }
         volume = value
         if value > 0, isMuted { setMuted(false) }
     }
@@ -97,7 +97,20 @@ public final class VolumeManager {
 
     public func toggleMute() { setMuted(!isMuted) }
 
+    /// One change fires several of the listeners at once; refresh once after they have all been delivered.
     private func listenerFired() {
+        guard !refreshPending else { return }
+        refreshPending = true
+        DispatchQueue.main.async { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self, self.refreshPending else { return }
+                self.refreshPending = false
+                self.externalRefresh()
+            }
+        }
+    }
+
+    private func externalRefresh() {
         let previousVolume = volume
         let previousMuted = isMuted
         guard refresh() else { return }
@@ -122,13 +135,13 @@ public final class VolumeManager {
         AudioProperty.address(kAudioDevicePropertyMute, Self.output, element)
     }
 
-    private var volumeSettable: Bool {
+    private var isVolumeSettable: Bool {
         AudioProperty.isSettable(deviceID, virtualMain)
             || AudioProperty.isSettable(deviceID, scalar(kAudioObjectPropertyElementMain))
             || Self.channels.contains { AudioProperty.isSettable(deviceID, scalar($0)) }
     }
 
-    private var muteSettable: Bool {
+    private var isMuteSettable: Bool {
         AudioProperty.isSettable(deviceID, mute(kAudioObjectPropertyElementMain))
             || Self.channels.contains { AudioProperty.isSettable(deviceID, mute($0)) }
     }
