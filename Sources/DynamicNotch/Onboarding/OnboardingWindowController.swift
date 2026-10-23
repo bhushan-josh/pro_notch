@@ -5,6 +5,7 @@ import SwiftUI
 @MainActor
 final class OnboardingWindowController {
     private var window: NSWindow?
+    private var closeObserver: NSObjectProtocol?
     private let onFinish: () -> Void
 
     init(onFinish: @escaping () -> Void) {
@@ -25,14 +26,22 @@ final class OnboardingWindowController {
         window.contentView = NSHostingView(rootView: OnboardingView { [weak self] in self?.finish() })
         window.center()
         self.window = window
+        // The close button must end onboarding too, or the Dock icon and the permission timer stay alive.
+        closeObserver = NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.finish() }
+        }
         NSApp.setActivationPolicy(.regular)
         NSApp.activate()
         window.makeKeyAndOrderFront(nil)
     }
 
     private func finish() {
-        window?.close()
-        window = nil
+        guard let window else { return }
+        if let closeObserver { NotificationCenter.default.removeObserver(closeObserver) }
+        closeObserver = nil
+        self.window = nil
+        window.contentView = nil
+        window.close()
         NSApp.setActivationPolicy(.accessory)
         onFinish()
     }

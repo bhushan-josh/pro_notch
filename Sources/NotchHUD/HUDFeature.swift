@@ -105,13 +105,16 @@ public final class HUDFeature: NotchFeature {
     private func handle(_ event: MediaKeyEvent) -> Bool {
         let replace = Defaults[HUDSettings.replaceSystemHUD]
         hudLog.notice("handle replace=\(replace, privacy: .public) volEnabled=\(HUDKind.volume.isEnabled, privacy: .public) canSet=\(self.volume.canSetVolume, privacy: .public) canMute=\(self.volume.canMute, privacy: .public) brightAvail=\(self.brightness.isAvailable, privacy: .public) vol=\(self.volume.volume, privacy: .public) bright=\(self.brightness.brightness, privacy: .public)")
+        // Runs inside the event tap: decide from cached state only and defer the work so the tap returns fast.
         switch event.key {
         case .soundUp, .soundDown, .mute:
-            guard replace, HUDKind.volume.isEnabled, volume.canSetVolume || volume.canMute else { return false }
+            if volume.deviceID != outputs.defaultDeviceID { volume.bind(to: outputs.defaultDeviceID) }
+            let capable = event.key == .mute ? volume.canMute : volume.canSetVolume
+            guard replace, HUDKind.volume.isEnabled, capable else { return false }
             if event.isDown {
-                adjustVolume(event)
-            } else if event.key != .mute, volume.canSetVolume {
-                playFeedbackIfNeeded(event)
+                DispatchQueue.main.async { [weak self] in self?.adjustVolume(event) }
+            } else if event.key != .mute {
+                DispatchQueue.main.async { [weak self] in self?.playFeedbackIfNeeded(event) }
             }
             return true
 
@@ -120,7 +123,7 @@ public final class HUDFeature: NotchFeature {
                 if event.isDown { brightness.noteUserIntent() }
                 return false
             }
-            if event.isDown { adjustBrightness(event) }
+            if event.isDown { DispatchQueue.main.async { [weak self] in self?.adjustBrightness(event) } }
             return true
 
         case .illuminationUp, .illuminationDown, .illuminationToggle:
@@ -129,7 +132,7 @@ public final class HUDFeature: NotchFeature {
                 if event.isDown { scheduleKeyboardRead() }
                 return false
             }
-            if event.isDown { adjustKeyboard(event) }
+            if event.isDown { DispatchQueue.main.async { [weak self] in self?.adjustKeyboard(event) } }
             return true
         }
     }

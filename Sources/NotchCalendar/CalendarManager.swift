@@ -40,6 +40,7 @@ final class CalendarManager {
     @ObservationIgnored private var tickTask: Task<Void, Never>?
     @ObservationIgnored private var fetchedRange: DateInterval?
     @ObservationIgnored private var currentDay: Date
+    @ObservationIgnored private var timeZone = TimeZone.current
 
     private var calendar: Calendar { .current }
 
@@ -86,10 +87,10 @@ final class CalendarManager {
                 MainActor.assumeIsolated { self?.tick() }
             },
             center.addObserver(forName: .NSSystemClockDidChange, object: nil, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated { self?.refresh() }
+                MainActor.assumeIsolated { self?.clockChanged() }
             },
             center.addObserver(forName: .NSSystemTimeZoneDidChange, object: nil, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated { self?.refresh() }
+                MainActor.assumeIsolated { self?.clockChanged() }
             },
         ]
         workspaceObservers = [
@@ -146,6 +147,19 @@ final class CalendarManager {
             return
         }
         onUpdate?()
+    }
+
+    /// Moves a non-today `selectedDay` to the same calendar date at midnight in the new time zone.
+    private func clockChanged() {
+        var previous = calendar
+        previous.timeZone = timeZone
+        timeZone = calendar.timeZone
+        if selectedDay != currentDay,
+           let day = calendar.date(from: previous.dateComponents([.year, .month, .day], from: selectedDay)),
+           day != selectedDay {
+            selectedDay = day
+        }
+        refresh()
     }
 
     func refresh() {
@@ -331,7 +345,7 @@ final class CalendarManager {
     // MARK: Dismissed events
 
     private static func dayStamp(_ date: Date) -> String {
-        date.formatted(.iso8601.year().month().day())
+        date.formatted(Date.ISO8601FormatStyle(timeZone: .current).year().month().day())
     }
 
     private func loadDismissed() {

@@ -226,7 +226,7 @@ public final class OutputDevices {
 
     private func signature(of device: AudioOutputDevice?) -> String {
         guard let device else { return "" }
-        return "\(device.uid)|\(device.kind)"
+        return "\(device.id)|\(device.uid)|\(device.kind)"
     }
 
     /// Intel Macs report headphones in the built-in jack as a data source change rather than a new device.

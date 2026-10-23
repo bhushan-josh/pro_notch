@@ -40,6 +40,8 @@ final class LockMonitor {
             guard !status.isScreenLocked else { return }
             status.isScreenLocked = true
         case .unlocked:
+            // Unlocking implies the screen saver is gone, even if its stop notification was missed.
+            if status.isScreenSaverActive { status.isScreenSaverActive = false }
             guard status.isScreenLocked else { return }
             status.isScreenLocked = false
         case .screenSaverStarted:

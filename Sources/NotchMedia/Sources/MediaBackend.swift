@@ -74,6 +74,8 @@ class MediaBackend {
     private(set) var snapshot: TrackSnapshot?
     /// Last time this source was playing or changed track; used to choose between sources automatically.
     private(set) var lastActiveAt = Date.distantPast
+    /// When the user last sent a command; reads that began before it would overwrite the optimistic update.
+    private(set) var lastCommandAt = Date.distantPast
     var onChange: (@MainActor () -> Void)?
     var capabilities: Set<MediaCapability> { [.skip, .seek] }
     var isRunning = false
@@ -96,7 +98,14 @@ class MediaBackend {
         return nil
     }
 
+    /// True when a read that began at `start` predates the last command, or ran too soon after it to reflect it.
+    func isStale(readStartedAt start: Date) -> Bool {
+        start < lastCommandAt.addingTimeInterval(0.25)
+    }
+
     func publish(_ new: TrackSnapshot?) {
+        // A read still in flight during stop() must not leave a stale track behind.
+        if new != nil, !isRunning { return }
         guard var new, !new.isEmpty else {
             guard snapshot != nil else { return }
             snapshot = nil
@@ -122,6 +131,7 @@ class MediaBackend {
         update(&current)
         snapshot = current
         lastActiveAt = Date()
+        lastCommandAt = Date()
         onChange?()
     }
 }
@@ -133,6 +143,7 @@ class PollingBackend: MediaBackend {
     private var observers: [NSObjectProtocol] = []
     private var isPolling = false
     private var pendingRefresh = false
+    private var pollStartedAt: Date?
 
     var playingInterval: TimeInterval { 1 }
     var idleInterval: TimeInterval { 3 }
@@ -140,6 +151,11 @@ class PollingBackend: MediaBackend {
     var watchedBundleIDs: [String] { [] }
 
     func poll() async {}
+
+    override func publish(_ new: TrackSnapshot?) {
+        if isRunning, let pollStartedAt, isStale(readStartedAt: pollStartedAt) { return }
+        super.publish(new)
+    }
 
     /// Runs a state script. "Can't get" errors mean there is no current track, so they clear the snapshot;
     /// other failures (timeouts, a busy app) keep the last known state rather than flickering.
@@ -218,8 +234,10 @@ class PollingBackend: MediaBackend {
         isPolling = true
         repeat {
             pendingRefresh = false
+            pollStartedAt = Date()
             await poll()
         } while pendingRefresh && isRunning
+        pollStartedAt = nil
         isPolling = false
     }
 }

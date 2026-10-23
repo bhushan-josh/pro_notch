@@ -51,6 +51,8 @@ final class DownloadMonitor {
     @ObservationIgnored private var samples: [UUID: (time: Date, bytes: Int64)] = [:]
     @ObservationIgnored private var pendingUpdate = false
     @ObservationIgnored private var expiryTasks: [UUID: Task<Void, Never>] = [:]
+    @ObservationIgnored private var lastChange: [UUID: Date] = [:]
+    @ObservationIgnored private var staleCheck: Task<Void, Never>?
 
     private(set) var items: [DownloadItem] = [] {
         didSet {
@@ -74,14 +76,25 @@ final class DownloadMonitor {
             }
             subscriptions.append(token)
         }
+        for item in items { scheduleExpiry(of: item.id) }
     }
 
     func stop() {
         subscriptions.forEach(Progress.removeSubscriber)
         subscriptions.removeAll()
         observers.removeAll()
+        progressByID.removeAll()
+        samples.removeAll()
+        lastChange.removeAll()
+        staleCheck?.cancel()
+        staleCheck = nil
         expiryTasks.values.forEach { $0.cancel() }
         expiryTasks.removeAll()
+        // Without a subscription these would never update or finish.
+        if items.contains(where: { $0.state == .active }) {
+            items.removeAll { $0.state == .active }
+            onUpdate?()
+        }
     }
 
     func clearFinished() {
@@ -127,8 +140,9 @@ final class DownloadMonitor {
         items.removeAll { old in replaced.contains { $0.id == old.id } }
         items.insert(item, at: 0)
         samples[id] = (Date(), progress.completedUnitCount)
+        lastChange[id] = Date()
         downloadLog.notice("started \(item.displayName, privacy: .public) total=\(item.totalBytes, privacy: .public)")
-        onStart?(items[0])
+        if replaced.isEmpty { onStart?(items[0]) } else { onUpdate?() }
 
         observers[id] = [
             progress.observe(\.completedUnitCount) { [weak self] _, _ in
@@ -139,6 +153,7 @@ final class DownloadMonitor {
             },
         ]
         progressByID[id] = progress
+        startStaleCheck()
     }
 
     @ObservationIgnored private var progressByID: [UUID: Progress] = [:]
@@ -161,6 +176,7 @@ final class DownloadMonitor {
             let id = items[index].id
             guard let progress = progressByID[id] else { continue }
             let completed = progress.completedUnitCount
+            if completed != items[index].completedBytes { lastChange[id] = now }
             syncURL(of: index, from: progress)
             items[index].totalBytes = progress.totalUnitCount
             items[index].completedBytes = completed
@@ -175,14 +191,21 @@ final class DownloadMonitor {
         onUpdate?()
     }
 
-    private func finish(id: UUID, progress: Progress) {
+    private func finish(id: UUID, progress: Progress, attempt: Int = 0) {
         forget(id)
-        guard let index = items.firstIndex(where: { $0.id == id }) else { return }
+        guard let index = items.firstIndex(where: { $0.id == id && $0.state == .active }) else { return }
         syncURL(of: index, from: progress)
         var item = items[index]
         let finalURL = Self.finalURL(for: item.partialURL) ?? Self.recentlyFinished(near: item)
-        let completed = !progress.isCancelled && finalURL != nil
-            && (item.totalBytes <= 0 || progress.completedUnitCount >= item.totalBytes || progress.fractionCompleted >= 0.999)
+        let bytesComplete = item.totalBytes <= 0 || progress.completedUnitCount >= item.totalBytes || progress.fractionCompleted >= 0.999
+        // Browsers can unpublish just before renaming "x.crdownload" to "x".
+        if finalURL == nil, !progress.isCancelled, bytesComplete, attempt < 6 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+                MainActor.assumeIsolated { self?.finish(id: id, progress: progress, attempt: attempt + 1) }
+            }
+            return
+        }
+        let completed = !progress.isCancelled && finalURL != nil && bytesComplete
         item.state = completed ? .finished : .failed
         item.finalURL = finalURL
         item.finishedAt = Date()
@@ -201,6 +224,41 @@ final class DownloadMonitor {
         observers.removeValue(forKey: id)
         progressByID.removeValue(forKey: id)
         samples.removeValue(forKey: id)
+        lastChange.removeValue(forKey: id)
+    }
+
+    private func startStaleCheck() {
+        guard staleCheck == nil else { return }
+        staleCheck = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(15))
+                guard !Task.isCancelled, let self else { return }
+                if !self.failStaleItems() {
+                    self.staleCheck = nil
+                    return
+                }
+            }
+        }
+    }
+
+    /// Fails downloads whose publisher went away without unpublishing, so they expire. Returns whether any remain active.
+    private func failStaleItems() -> Bool {
+        let now = Date()
+        var changed = false
+        for index in items.indices where items[index].state == .active {
+            let id = items[index].id
+            // Items with no record are waiting in finish(id:progress:attempt:) for the final file.
+            guard let last = lastChange[id], now.timeIntervalSince(last) >= 60,
+                  !FileManager.default.fileExists(atPath: items[index].partialURL.path) else { continue }
+            forget(id)
+            items[index].state = .failed
+            items[index].finishedAt = now
+            scheduleExpiry(of: id)
+            downloadLog.notice("stale \(self.items[index].displayName, privacy: .public)")
+            changed = true
+        }
+        if changed { onUpdate?() }
+        return items.contains { $0.state == .active }
     }
 
     /// An "Unconfirmed 123.crdownload" entry that a browser re-published under the real name.
@@ -227,18 +285,21 @@ final class DownloadMonitor {
         isPartial(url) ? url.deletingPathExtension().lastPathComponent : url.lastPathComponent
     }
 
-    /// Fallback when the partial's name did not carry the final one: the newest same-sized file written just now.
+    /// Fallback when the partial's name did not carry the final one: the newest file written just now with the same name or size.
     nonisolated static func recentlyFinished(near item: DownloadItem) -> URL? {
         let folder = item.partialURL.deletingLastPathComponent()
         let keys: [URLResourceKey] = [.contentModificationDateKey, .fileSizeKey, .isRegularFileKey]
         guard let contents = try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: keys) else { return nil }
         let cutoff = Date().addingTimeInterval(-10)
+        let stem = (item.displayName as NSString).deletingPathExtension.lowercased()
         return contents
             .filter { !isPartial($0) }
             .compactMap { url -> (URL, Date)? in
                 guard let values = try? url.resourceValues(forKeys: Set(keys)),
                       let modified = values.contentModificationDate, modified > cutoff else { return nil }
-                if item.totalBytes > 0, let size = values.fileSize, Int64(size) != item.totalBytes { return nil }
+                let sameName = url.deletingPathExtension().lastPathComponent.lowercased() == stem
+                let sameSize = item.totalBytes > 0 && values.fileSize.map { Int64($0) == item.totalBytes } == true
+                guard sameName || sameSize else { return nil }
                 return (url, modified)
             }
             .max { $0.1 < $1.1 }?.0

@@ -69,18 +69,24 @@ final class MusicBackend: PollingBackend {
         let script = """
         if application id "com.apple.Music" is running then
             tell application id "com.apple.Music"
+                set theTrack to current track
+                set artData to missing value
                 try
-                    return raw data of artwork 1 of current track
+                    set artData to raw data of artwork 1 of theTrack
+                on error
+                    try
+                        set artData to data of artwork 1 of theTrack
+                    end try
                 end try
-                try
-                    return data of artwork 1 of current track
-                end try
+                return {name of theTrack, artist of theTrack, artData}
             end tell
         end if
         return missing value
         """
-        guard let descriptor = try? await AppleScriptRunner.run(script) else { return nil }
-        let data = descriptor.data
+        // Scripts queue behind each other, so the current track may no longer be the one requested.
+        guard let descriptor = try? await AppleScriptRunner.run(script),
+              descriptor.string(1) == track.title, descriptor.string(2) == track.artist,
+              let data = descriptor.item(3)?.data else { return nil }
         guard !data.isEmpty, let image = NSImage(data: data), image.isValid else { return nil }
         return image
     }

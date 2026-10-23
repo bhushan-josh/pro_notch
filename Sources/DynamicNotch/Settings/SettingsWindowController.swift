@@ -33,10 +33,18 @@ final class SettingsWindowController {
 
     private var closeObserver: NSObjectProtocol?
 
+    /// Dropping the window on close also stops the timers its panes run (the Permissions pane polls every 2s).
     private func observeClose() {
         guard closeObserver == nil, let window else { return }
-        closeObserver = NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { _ in
-            MainActor.assumeIsolated { _ = NSApp.setActivationPolicy(.accessory) }
+        closeObserver = NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                if let observer = self.closeObserver { NotificationCenter.default.removeObserver(observer) }
+                self.closeObserver = nil
+                self.window?.contentView = nil
+                self.window = nil
+                _ = NSApp.setActivationPolicy(.accessory)
+            }
         }
     }
 }

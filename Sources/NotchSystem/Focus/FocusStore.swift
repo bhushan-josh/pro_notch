@@ -12,6 +12,13 @@ struct FocusReading: Sendable, Equatable {
     var configs: [String: FocusModeConfig]
 }
 
+enum FocusReadResult: Sendable, Equatable {
+    case reading(FocusReading)
+    case noAccess
+    /// The file was readable but not parsable, typically mid-write; keep the previous state.
+    case unreadable
+}
+
 /// Reads the Focus database the system keeps in ~/Library/DoNotDisturb. It is TCC protected (Full Disk Access).
 enum FocusStore {
     static let directory: URL = {
@@ -49,11 +56,19 @@ enum FocusStore {
         }
     }
 
-    /// Nil when the database cannot be read, which is different from "no Focus active".
-    static func read() -> FocusReading? {
-        guard let data = try? Data(contentsOf: assertionsURL),
-              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        else { return nil }
+    /// A missing Assertions file means no Focus is active; only a permission failure means no access.
+    static func read() -> FocusReadResult {
+        let data: Data
+        do {
+            data = try Data(contentsOf: assertionsURL)
+        } catch let error as CocoaError where error.code == .fileReadNoSuchFile {
+            return canRead ? .reading(FocusReading(activeIdentifier: nil, configs: readConfigurations())) : .noAccess
+        } catch let error as CocoaError where error.code == .fileReadNoPermission {
+            return .noAccess
+        } catch {
+            return canRead ? .unreadable : .noAccess
+        }
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return .unreadable }
 
         let stores = root["data"] as? [[String: Any]] ?? []
         let records = stores.first?["storeAssertionRecords"] as? [[String: Any]] ?? []
@@ -61,7 +76,7 @@ enum FocusStore {
             .sorted { timestamp($0) < timestamp($1) }
             .compactMap { ($0["assertionDetails"] as? [String: Any])?["assertionDetailsModeIdentifier"] as? String }
             .last
-        return FocusReading(activeIdentifier: active, configs: readConfigurations())
+        return .reading(FocusReading(activeIdentifier: active, configs: readConfigurations()))
     }
 
     private static func timestamp(_ record: [String: Any]) -> Double {

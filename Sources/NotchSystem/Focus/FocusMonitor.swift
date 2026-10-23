@@ -4,7 +4,7 @@ import Foundation
 /// for when the watchers cannot be opened (no Full Disk Access yet) or miss an atomic replace.
 @MainActor
 final class FocusMonitor {
-    var onReading: ((FocusReading?) -> Void)?
+    var onReading: ((FocusReadResult) -> Void)?
 
     private var directorySource: DispatchSourceFileSystemObject?
     private var fileSource: DispatchSourceFileSystemObject?

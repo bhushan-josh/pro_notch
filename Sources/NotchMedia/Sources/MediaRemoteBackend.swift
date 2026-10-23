@@ -119,6 +119,7 @@ final class MediaRemoteBackend: MediaBackend {
         guard isRunning, let functions = Self.functions else { return }
         fetchGeneration += 1
         let generation = fetchGeneration
+        let startedAt = Date()
         if let getClient = functions.getClient, let bundleFn = functions.clientBundleID {
             let parentFn = functions.clientParentBundleID
             getClient(DispatchQueue.main) { [weak self] client in
@@ -140,7 +141,7 @@ final class MediaRemoteBackend: MediaBackend {
         functions.getInfo(DispatchQueue.main) { [weak self] info in
             let dictionary = (info as NSDictionary?) as? [String: Any]
             MainActor.assumeIsolated {
-                guard let self, generation == self.fetchGeneration else { return }
+                guard let self, generation == self.fetchGeneration, !self.isStale(readStartedAt: startedAt) else { return }
                 self.handle(info: dictionary ?? [:])
             }
         }
@@ -178,9 +179,11 @@ final class MediaRemoteBackend: MediaBackend {
 
         if let getIsPlaying = Self.functions?.getIsPlaying {
             let generation = fetchGeneration
+            let startedAt = Date()
             getIsPlaying(DispatchQueue.main) { [weak self] playing in
                 MainActor.assumeIsolated {
-                    guard let self, generation == self.fetchGeneration, var current = self.snapshot,
+                    guard let self, generation == self.fetchGeneration, !self.isStale(readStartedAt: startedAt),
+                          var current = self.snapshot,
                           current.isPlaying != playing else { return }
                     current.rebase()
                     current.isPlaying = playing

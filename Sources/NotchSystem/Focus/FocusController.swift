@@ -24,10 +24,10 @@ final class FocusController {
         ActivityCenter.shared.gate = nil
     }
 
-    private func apply(_ reading: FocusReading?) {
-        let readable = reading != nil
+    private func apply(_ result: FocusReadResult) {
+        let readable = result != .noAccess
         if hasAccess != readable { hasAccess = readable }
-        guard let reading else { return }
+        guard case .reading(let reading) = result else { return }
 
         let status = SystemStatus.shared
         let info = reading.activeIdentifier.map { FocusCatalog.info(for: $0, config: reading.configs[$0]) }

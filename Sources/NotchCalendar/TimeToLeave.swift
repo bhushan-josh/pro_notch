@@ -21,7 +21,7 @@ final class TimeToLeave: NSObject, CLLocationManagerDelegate {
     private var lastLocation: CLLocation?
     private var lastLocationRequest: Date?
     private var estimates: [String: Estimate] = [:]
-    private var geocoded: [String: MKMapItem?] = [:]
+    private var geocoded: [String: MKMapItem] = [:]
     private var inFlight: Set<String> = []
     private var notified: Set<String> = []
     private var permissionRegistered = false
@@ -190,7 +190,7 @@ final class TimeToLeave: NSObject, CLLocationManagerDelegate {
             search.region = region
             item = try? await MKLocalSearch(request: search).start().mapItems.first
         }
-        geocoded[address] = item
+        if let item { geocoded[address] = item }
         return item
     }
 

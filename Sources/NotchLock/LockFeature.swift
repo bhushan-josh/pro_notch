@@ -58,6 +58,9 @@ public final class LockFeature: NotchFeature {
 
     private func updateKeepAwake() {
         let status = SystemStatus.shared
-        keepAwake.set(Defaults[LockSettings.keepAwake] && status.isScreenLocked && status.isMediaPlaying)
+        // Read observable state unconditionally so ObservationLoop stays armed while the setting is off.
+        let isLocked = status.isScreenLocked
+        let isMediaPlaying = status.isMediaPlaying
+        keepAwake.set(Defaults[LockSettings.keepAwake] && isLocked && isMediaPlaying)
     }
 }

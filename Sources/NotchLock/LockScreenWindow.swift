@@ -89,10 +89,13 @@ final class LockScreenWindowController {
     }
 
     var shouldShow: Bool {
-        guard Defaults[LockSettings.widgetsEnabled] else { return false }
+        // Read observable state before any Defaults check so ObservationLoop always has something to track.
         let status = SystemStatus.shared
-        if status.isScreenSaverActive { return Defaults[LockSettings.showOnScreenSaver] }
-        return status.isScreenLocked
+        let isLocked = status.isScreenLocked
+        let isScreenSaverActive = status.isScreenSaverActive
+        guard Defaults[LockSettings.widgetsEnabled] else { return false }
+        if isScreenSaverActive { return Defaults[LockSettings.showOnScreenSaver] }
+        return isLocked
     }
 
     func update() {

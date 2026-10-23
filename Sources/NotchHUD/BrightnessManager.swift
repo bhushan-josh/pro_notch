@@ -52,6 +52,8 @@ public final class BrightnessManager {
     }
 
     func stop() {
+        rampTask?.cancel()
+        rampTask = nil
         unregister()
         if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
         screenObserver = nil

@@ -38,7 +38,11 @@ struct FlippingArtwork: View {
     var flips: Bool
 
     @State private var shown: NSImage?
+    /// The image most recently handed to `shown`, possibly still mid-flip.
+    @State private var latest: NSImage?
     @State private var shownKey: String?
+    /// Set on a track change; the old art stays until the new track's art lands, which then flips in.
+    @State private var awaitingArt = false
     @State private var angle: Double = 0
     @State private var didAppear = false
 
@@ -47,6 +51,7 @@ struct FlippingArtwork: View {
             .rotation3DEffect(.degrees(angle), axis: (x: 0, y: 1, z: 0), perspective: 0.45)
             .onAppear {
                 shown = image
+                latest = image
                 shownKey = trackKey
                 didAppear = true
             }
@@ -55,21 +60,22 @@ struct FlippingArtwork: View {
     }
 
     private func update() {
-        guard image !== shown else {
+        if trackKey != shownKey {
             shownKey = trackKey
-            return
+            awaitingArt = flips
         }
-        let isNewTrack = trackKey != shownKey
-        shownKey = trackKey
-        guard flips, isNewTrack else {
-            withAnimation(.easeInOut(duration: 0.2)) { shown = image }
-            return
-        }
+        guard image !== latest else { return }
+        latest = image
         let target = image
+        guard awaitingArt else {
+            withAnimation(.easeInOut(duration: 0.2)) { shown = target }
+            return
+        }
+        awaitingArt = false
         withAnimation(.easeIn(duration: 0.16)) {
             angle = 90
         } completion: {
-            shown = target
+            shown = latest
             angle = -90
             withAnimation(.spring(response: 0.32, dampingFraction: 0.72)) { angle = 0 }
         }
