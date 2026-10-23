@@ -254,7 +254,6 @@ struct DownloadRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             if item.state == .finished {
                 RowButton(symbol: "magnifyingglass", help: "Show in Finder") { reveal() }
-                RowButton(symbol: "tray.and.arrow.down", help: "Add to File Tray") { addToTray() }
             } else if item.state == .failed {
                 RowButton(symbol: "xmark", help: "Remove") { monitor.remove(item.id) }
             } else {
@@ -277,7 +276,6 @@ struct DownloadRow: View {
             if item.state == .finished {
                 Button("Open") { NSWorkspace.shared.open(item.fileURL) }
                 Button("Show in Finder") { reveal() }
-                Button("Add to File Tray") { addToTray() }
                 Button("Copy") {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.writeObjects([item.fileURL as NSURL])
@@ -292,12 +290,6 @@ struct DownloadRow: View {
     }
 
     private func reveal() { NSWorkspace.shared.activateFileViewerSelecting([item.fileURL]) }
-
-    /// Hands the file to whichever feature handles drops on the notch (the File Tray).
-    private func addToTray() {
-        guard let provider = NSItemProvider(contentsOf: item.fileURL) else { return }
-        _ = NotchRegistry.shared.dropHandler?([provider])
-    }
 }
 
 private struct RowButton: View {

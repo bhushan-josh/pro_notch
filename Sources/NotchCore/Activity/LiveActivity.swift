@@ -1,7 +1,7 @@
 import SwiftUI
 
 public enum ActivityCategory: String, Sendable {
-    case media, volume, brightness, keyboardBacklight, battery, connectivity, calendar, focus, lock, fileTray, other
+    case media, volume, brightness, keyboardBacklight, battery, connectivity, calendar, focus, lock, other
 }
 
 public struct ActivityPriority: Comparable, Sendable, ExpressibleByIntegerLiteral {

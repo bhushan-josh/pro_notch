@@ -2,7 +2,6 @@ import AppKit
 import NotchCalendar
 import NotchCore
 import NotchDownloads
-import NotchFileTray
 import NotchHUD
 import NotchLock
 import NotchMedia
@@ -16,7 +15,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         SystemFeature(),
         CalendarFeature(),
         LockFeature(),
-        FileTrayFeature(),
         DownloadsFeature(),
     ]
     private let statusItem = StatusItemController()

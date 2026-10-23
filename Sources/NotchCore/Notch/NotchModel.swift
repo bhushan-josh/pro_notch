@@ -116,8 +116,6 @@ public final class NotchModel {
     /// A page resize drag is in progress; the island must not close under the pointer.
     public internal(set) var isResizing = false
     public var selectedPageID = NotchModel.homePageID
-    /// Files are being dragged over the notch.
-    public internal(set) var isDropTargeted = false
     /// The display is showing a fullscreen app and the user asked to hide the notch there.
     public internal(set) var isHiddenForFullscreen = false
     /// Frame of the visible shape in window coordinates (top-left origin).

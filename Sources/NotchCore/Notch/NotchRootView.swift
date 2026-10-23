@@ -1,5 +1,4 @@
 import SwiftUI
-import UniformTypeIdentifiers
 
 struct NotchRootView: View {
     @Environment(NotchModel.self) private var model
@@ -23,38 +22,38 @@ struct NotchRootView: View {
         let scale = open ? 1 : (model.isPressed ? NotchLayout.pressScale : (hovering ? NotchLayout.hoverScale : 1))
 
         VStack(spacing: 0) {
-            // The clip sits on the animated frame, not on the content: inserted content is laid out at its
-            // final size at once, so only a frame-level clip reveals it in step with the growing panel.
-            ZStack(alignment: .top) {
-                if open {
-                    ExpandedNotchView().transition(.islandExpanded)
-                } else {
-                    ClosedActivityView(activity: activity, notchSize: model.geometry.notchSize)
+            if !model.isSuppressed {
+                // The clip sits on the animated frame, not on the content: inserted content is laid out at its
+                // final size at once, so only a frame-level clip reveals it in step with the growing panel.
+                ZStack(alignment: .top) {
+                    if open {
+                        ExpandedNotchView().transition(.islandExpanded)
+                    } else {
+                        ClosedActivityView(activity: activity, notchSize: model.geometry.notchSize)
+                    }
                 }
+                .padding(.horizontal, top)
+                .frame(width: size.width + top * 2, height: size.height, alignment: .top)
+                .clipShape(shape)
+                .background {
+                    shape
+                        .fill(.black)
+                        .shadow(color: .black.opacity(open ? 0.4 : (hovering ? 0.25 : 0)), radius: open ? 18 : 8, y: open ? 8 : 2)
+                }
+                .overlay {
+                    if contrastOutline { shape.stroke(.white.opacity(0.14), lineWidth: 1) }
+                }
+                .scaleEffect(scale, anchor: .top)
+                .contentShape(shape)
+                .onGeometryChange(for: CGRect.self, of: { $0.frame(in: .global) }) { model.shapeFrame = $0 }
+                .onTapGesture { handleTap(activity: activity) }
+                .contextMenu { contextMenu }
+                    .transition(.opacity)
             }
-            .padding(.horizontal, top)
-            .frame(width: size.width + top * 2, height: size.height, alignment: .top)
-            .clipShape(shape)
-            .background {
-                shape
-                    .fill(.black)
-                    .shadow(color: .black.opacity(open ? 0.4 : (hovering ? 0.25 : 0)), radius: open ? 18 : 8, y: open ? 8 : 2)
-            }
-            .overlay {
-                if contrastOutline { shape.stroke(.white.opacity(0.14), lineWidth: 1) }
-            }
-            .scaleEffect(scale, anchor: .top)
-            .contentShape(shape)
-            .onGeometryChange(for: CGRect.self, of: { $0.frame(in: .global) }) { model.shapeFrame = $0 }
-            .onTapGesture { handleTap(activity: activity) }
-            .onDrop(of: [.fileURL, .url, .image, .data], isTargeted: nil) { providers in
-                registry.dropHandler?(providers) ?? false
-            }
-            .contextMenu { contextMenu }
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .opacity(model.isSuppressed ? 0 : 1)
+        .animation(.easeInOut(duration: 0.2), value: model.isSuppressed)
         .animation(IslandKind.animation(from: previousKind, to: kind), value: kind)
         .animation(IslandKind.animation(from: previousKind, to: kind), value: activity?.id)
         .animation(hovering ? .islandHover : .islandUnhover, value: hovering)

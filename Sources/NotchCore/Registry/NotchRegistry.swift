@@ -9,7 +9,7 @@ public protocol NotchFeature: AnyObject {
     func stop()
 }
 
-/// A tab of the expanded notch (Home, File Tray...).
+/// A tab of the expanded notch (Home, Downloads...).
 public struct NotchPage: Identifiable {
     public let id: String
     public var title: String
@@ -125,11 +125,6 @@ public final class NotchRegistry {
 
     /// Horizontal swipes on the notch; the first handler returning true consumes it.
     @ObservationIgnored public private(set) var swipeHandlers: [(SwipeDirection) -> Bool] = []
-
-    /// File drops onto the notch. Returns true when handled. Registering also makes drags open the notch.
-    @ObservationIgnored public var dropHandler: (([NSItemProvider]) -> Bool)?
-    /// Page selected when files are dragged over the notch.
-    @ObservationIgnored public var dropPageID: String?
 
     @ObservationIgnored public var openSettings: (@MainActor (_ paneID: String?) -> Void)?
 

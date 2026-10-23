@@ -42,9 +42,6 @@ final class NotchWindowController {
     private var settingsObserver: AnyObject?
     private var hoverTask: Task<Void, Never>?
     private var closeTask: Task<Void, Never>?
-    private var openedByDrag = false
-    private var dragChangeCount = NSPasteboard(name: .drag).changeCount
-    private var isFileDragActive = false
     private var scrollAccumulator = CGSize.zero
     private var scrollConsumed = false
 
@@ -65,8 +62,7 @@ final class NotchWindowController {
         installMonitors()
 
         model.onOpenChange = { [weak self] open in
-            guard let self else { return }
-            if open { panel.ignoresMouseEvents = false } else { openedByDrag = false }
+            if open { self?.setIgnoresMouseEvents(false) }
         }
     }
 
@@ -171,51 +167,43 @@ final class NotchWindowController {
         rect = rect.isEmpty ? notchRect : rect.union(notchRect)
         // A pointer pinned to the top edge reports y == maxY, which NSRect.contains treats as outside.
         rect.size.height += 2
-        if isFileDragActive { rect = rect.insetBy(dx: -40, dy: -30) }
         return rect
     }
 
+    /// Runs for every mouse event on screen, so it avoids writes (and WindowServer calls) when nothing changes.
     private func handleMouse(_ type: NSEvent.EventType) {
-        let location = NSEvent.mouseLocation
-
-        switch type {
-        case .leftMouseDown:
-            dragChangeCount = NSPasteboard(name: .drag).changeCount
-            if !model.isOpen, interactiveRect.contains(location) { model.isPressed = true }
-        case .leftMouseDragged:
-            if !isFileDragActive, NotchRegistry.shared.dropHandler != nil,
-               NSPasteboard(name: .drag).changeCount != dragChangeCount {
-                isFileDragActive = true
-            }
-        case .leftMouseUp:
-            model.isPressed = false
-            if isFileDragActive {
-                isFileDragActive = false
-                model.isDropTargeted = false
-            }
-        default:
-            break
+        if type == .leftMouseUp {
+            if model.isPressed { model.isPressed = false }
+            // The resize gesture's own end handler is skipped if its view disappears mid-drag.
+            if model.isResizing { model.isResizing = false }
         }
-
         if model.isResizing {
-            panel.ignoresMouseEvents = false
+            setIgnoresMouseEvents(false)
             return
         }
-        let inside = interactiveRect.contains(location)
-        panel.ignoresMouseEvents = !inside
+        // Hidden for a fullscreen app: invisible and untouchable, so clicks reach the app's own top strip.
+        if model.isSuppressed {
+            setIgnoresMouseEvents(true)
+            if model.isHovering { model.isHovering = false }
+            hoverTask?.cancel()
+            return
+        }
 
-        if isFileDragActive {
-            model.isDropTargeted = inside
-            if inside, !model.isOpen {
-                openedByDrag = true
-                model.open(page: NotchRegistry.shared.dropPageID)
+        let inside = interactiveRect.contains(NSEvent.mouseLocation)
+        setIgnoresMouseEvents(!inside)
+
+        if type == .leftMouseDown {
+            if inside {
+                if !model.isOpen { model.isPressed = true }
+            } else if model.isOpen {
+                model.close()
             }
         }
 
         if inside, !model.isHovering {
             model.isHovering = true
             closeTask?.cancel()
-            if Defaults[CoreSettings.expandOnHover], !model.isOpen, !model.isSuppressed {
+            if Defaults[CoreSettings.expandOnHover], !model.isOpen {
                 let delay = Defaults[CoreSettings.hoverDuration]
                 hoverTask?.cancel()
                 hoverTask = Task { [weak self] in
@@ -227,19 +215,24 @@ final class NotchWindowController {
         } else if !inside, model.isHovering {
             model.isHovering = false
             hoverTask?.cancel()
-            guard model.isOpen, !isFileDragActive else { return }
-            let delay = openedByDrag ? 400 : 120
+            guard model.isOpen else { return }
             closeTask = Task { [weak self] in
-                try? await Task.sleep(for: .milliseconds(delay))
+                try? await Task.sleep(for: .milliseconds(120))
                 guard !Task.isCancelled, let self, !self.model.isHovering else { return }
                 self.model.close()
             }
         }
     }
 
+    private func setIgnoresMouseEvents(_ ignores: Bool) {
+        if panel.ignoresMouseEvents != ignores { panel.ignoresMouseEvents = ignores }
+    }
+
     /// Two-finger swipes: down opens, up closes or dismisses, sideways skips media or cycles activities.
     private func handleScroll(_ event: NSEvent) -> Bool {
-        guard event.window === panel else { return false }
+        guard event.window === panel, !model.isSuppressed else { return false }
+        // Momentum after a finished swipe would otherwise cross the threshold again and act a second time.
+        if !event.momentumPhase.isEmpty { return !model.isOpen }
         if event.phase == .began || event.phase == .mayBegin {
             scrollAccumulator = .zero
             scrollConsumed = false
@@ -262,6 +255,7 @@ final class NotchWindowController {
 
         let direction: SwipeDirection = abs(dx) > abs(dy) ? (dx > 0 ? .right : .left) : (dy > 0 ? .down : .up)
         scrollConsumed = true
+        scrollAccumulator = .zero
         switch direction {
         case .down:
             if Defaults[CoreSettings.swipeToToggle], !model.isOpen { model.open() }
