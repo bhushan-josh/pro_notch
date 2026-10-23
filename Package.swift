@@ -21,12 +21,13 @@ let package = Package(
         .target(name: "NotchLock", dependencies: ["NotchCore"], swiftSettings: swiftSettings),
         .target(name: "NotchCalendar", dependencies: ["NotchCore"], swiftSettings: swiftSettings),
         .target(name: "NotchFileTray", dependencies: ["NotchCore"], swiftSettings: swiftSettings),
+        .target(name: "NotchDownloads", dependencies: ["NotchCore"], swiftSettings: swiftSettings),
 
         .executableTarget(
             name: "DynamicNotch",
             dependencies: [
                 "NotchCore", "NotchMedia", "NotchHUD", "NotchSystem",
-                "NotchLock", "NotchCalendar", "NotchFileTray",
+                "NotchLock", "NotchCalendar", "NotchFileTray", "NotchDownloads",
             ],
             swiftSettings: swiftSettings
         ),
