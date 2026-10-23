@@ -11,8 +11,8 @@ public enum DownloadsSettings {
     public static let playSoundOnComplete = SettingKey("downloads.playSoundOnComplete", default: true)
     /// Downloads smaller than this many megabytes finish without a notch activity.
     public static let minimumSizeMB = SettingKey("downloads.minimumSizeMB", default: 0.0)
-    /// Hours a finished download stays on the Downloads page.
-    public static let keepRecentHours = SettingKey("downloads.keepRecentHours", default: 24.0)
+    /// Seconds a finished download stays on the Downloads page; the page disappears once the list is empty.
+    public static let hideFinishedAfter = SettingKey("downloads.hideFinishedAfter", default: 30.0)
 
     static var folders: [URL] {
         let downloads = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)

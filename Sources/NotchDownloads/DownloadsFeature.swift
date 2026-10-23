@@ -1,6 +1,7 @@
 import AppKit
 import NotchCore
 import SwiftUI
+import os
 
 @MainActor
 public final class DownloadsFeature: NotchFeature {
@@ -25,6 +26,7 @@ public final class DownloadsFeature: NotchFeature {
         monitor.onStart = { [weak self] item in self?.started(item) }
         monitor.onUpdate = { [weak self] in self?.refreshProgressActivity(withPeek: nil) }
         monitor.onFinish = { [weak self] item in self?.finished(item) }
+        monitor.onEmptyChange = { [weak self] isEmpty in self?.updatePage(visible: !isEmpty) }
 
         apply()
         settingsObserver = Defaults.observe([DownloadsSettings.enabled.name, DownloadsSettings.extraFolders.name]) { [weak self] in
@@ -42,17 +44,37 @@ public final class DownloadsFeature: NotchFeature {
     private func apply() {
         let enabled = Defaults[DownloadsSettings.enabled]
         if enabled {
-            let monitor = monitor
-            NotchRegistry.shared.register(page: NotchPage(id: Self.pageID, title: "Downloads", symbol: "arrow.down.circle.fill", order: 20) {
-                DownloadsPage(monitor: monitor)
-            })
             monitor.start()
             isRunning = true
+            updatePage(visible: !monitor.items.isEmpty)
         } else {
-            NotchRegistry.shared.unregister(pageID: Self.pageID)
+            updatePage(visible: false)
             monitor.stop()
             ActivityCenter.shared.dismiss(id: Self.progressActivityID)
             isRunning = false
+        }
+    }
+
+    /// The Downloads tab exists only while the list has something in it.
+    private func updatePage(visible: Bool) {
+        let registry = NotchRegistry.shared
+        if visible, Defaults[DownloadsSettings.enabled] {
+            guard !registry.pages.contains(where: { $0.id == Self.pageID }) else { return }
+            Logger(subsystem: "com.personal.DynamicNotch", category: "downloads").notice("downloads page shown")
+            let monitor = monitor
+            withAnimation(.notchSnappy) {
+                registry.register(page: NotchPage(id: Self.pageID, title: "Downloads", symbol: "arrow.down.circle.fill", order: 20) {
+                    DownloadsPage(monitor: monitor)
+                })
+            }
+        } else {
+            if registry.pages.contains(where: { $0.id == Self.pageID }) {
+                Logger(subsystem: "com.personal.DynamicNotch", category: "downloads").notice("downloads page hidden")
+            }
+            for model in NotchManager.shared.models where model.selectedPageID == Self.pageID {
+                model.selectedPageID = NotchModel.homePageID
+            }
+            withAnimation(.notchSnappy) { registry.unregister(pageID: Self.pageID) }
         }
     }
 
@@ -154,7 +176,7 @@ struct DownloadsSettingsView: View {
     @AppStorage(DownloadsSettings.notifyOnComplete) private var notifyOnComplete
     @AppStorage(DownloadsSettings.playSoundOnComplete) private var playSound
     @AppStorage(DownloadsSettings.minimumSizeMB) private var minimumSize
-    @AppStorage(DownloadsSettings.keepRecentHours) private var keepHours
+    @AppStorage(DownloadsSettings.hideFinishedAfter) private var hideAfter
     @State private var extraFolders = Defaults[DownloadsSettings.extraFolders]
 
     var body: some View {
@@ -171,7 +193,7 @@ struct DownloadsSettingsView: View {
                     SettingsSlider("Ignore Downloads Smaller Than", value: $minimumSize, in: 0...100, step: 1, format: { $0 == 0 ? "Off" : "\(Int($0)) MB" })
                 }
                 Section("Downloads Page") {
-                    SettingsSlider("Keep Finished Downloads For", value: $keepHours, in: 1...72, step: 1, format: { "\(Int($0)) h" })
+                    SettingsSlider("Hide Finished Downloads After", value: $hideAfter, in: 5...300, step: 5, format: { "\(Int($0)) s" })
                 }
                 Section {
                     LabeledContent("Downloads") { Text("~/Downloads").foregroundStyle(.secondary) }

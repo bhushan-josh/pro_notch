@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 import NotchCore
 import Observation
 import os
@@ -39,17 +40,23 @@ struct DownloadItem: Identifiable, Equatable {
 @MainActor
 @Observable
 final class DownloadMonitor {
-    private(set) var items: [DownloadItem] = []
-
     @ObservationIgnored var onStart: ((DownloadItem) -> Void)?
     @ObservationIgnored var onFinish: ((DownloadItem) -> Void)?
     @ObservationIgnored var onUpdate: (() -> Void)?
+    /// Fires whenever the list goes from empty to non-empty or back.
+    @ObservationIgnored var onEmptyChange: ((_ isEmpty: Bool) -> Void)?
 
     @ObservationIgnored private var subscriptions: [Any] = []
     @ObservationIgnored private var observers: [UUID: [NSKeyValueObservation]] = [:]
     @ObservationIgnored private var samples: [UUID: (time: Date, bytes: Int64)] = [:]
     @ObservationIgnored private var pendingUpdate = false
-    @ObservationIgnored private var pruneTimer: Timer?
+    @ObservationIgnored private var expiryTasks: [UUID: Task<Void, Never>] = [:]
+
+    private(set) var items: [DownloadItem] = [] {
+        didSet {
+            if items.isEmpty != oldValue.isEmpty { onEmptyChange?(items.isEmpty) }
+        }
+    }
 
     nonisolated private static let partialExtensions: Set<String> = ["crdownload", "download", "part", "partial", "opdownload"]
 
@@ -67,25 +74,35 @@ final class DownloadMonitor {
             }
             subscriptions.append(token)
         }
-        pruneTimer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.pruneOld() }
-        }
     }
 
     func stop() {
         subscriptions.forEach(Progress.removeSubscriber)
         subscriptions.removeAll()
         observers.removeAll()
-        pruneTimer?.invalidate()
-        pruneTimer = nil
+        expiryTasks.values.forEach { $0.cancel() }
+        expiryTasks.removeAll()
     }
 
     func clearFinished() {
+        for item in items where item.state != .active { expiryTasks.removeValue(forKey: item.id)?.cancel() }
         items.removeAll { $0.state != .active }
     }
 
     func remove(_ id: UUID) {
+        expiryTasks.removeValue(forKey: id)?.cancel()
         items.removeAll { $0.id == id && $0.state != .active }
+    }
+
+    private func scheduleExpiry(of id: UUID) {
+        let delay = max(5, Defaults[DownloadsSettings.hideFinishedAfter])
+        expiryTasks[id]?.cancel()
+        expiryTasks[id] = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(delay))
+            guard !Task.isCancelled, let self else { return }
+            self.expiryTasks.removeValue(forKey: id)
+            withAnimation(.notchSnappy) { self.items.removeAll { $0.id == id && $0.state != .active } }
+        }
     }
 
     // MARK: Tracking
@@ -175,6 +192,7 @@ final class DownloadMonitor {
             if let finalURL { item.displayName = finalURL.lastPathComponent }
         }
         items[index] = item
+        scheduleExpiry(of: id)
         downloadLog.notice("finished \(item.displayName, privacy: .public) state=\(String(describing: item.state), privacy: .public)")
         onFinish?(item)
     }
@@ -197,11 +215,6 @@ final class DownloadMonitor {
         guard let url = (progress.userInfo[.fileURLKey] as? URL) ?? progress.fileURL, url != items[index].partialURL else { return }
         items[index].partialURL = url
         items[index].displayName = Self.displayName(for: url)
-    }
-
-    private func pruneOld() {
-        let cutoff = Date().addingTimeInterval(-Defaults[DownloadsSettings.keepRecentHours] * 3600)
-        items.removeAll { $0.state != .active && ($0.finishedAt ?? .distantFuture) < cutoff }
     }
 
     // MARK: File names
