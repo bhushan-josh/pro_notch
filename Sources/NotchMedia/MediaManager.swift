@@ -146,7 +146,10 @@ public final class MediaManager {
         active = backend
         sourceKind = backend?.kind
         capabilities = backend?.capabilities ?? []
-        if track != new { track = new }
+        if track != new {
+            track = new
+            LyricsManager.shared.update(new)
+        }
 
         let identity = new?.identity
         if identity != lastIdentity {

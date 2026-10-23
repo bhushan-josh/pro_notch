@@ -144,31 +144,34 @@ struct ExpandedNotchView: View {
     @Environment(NotchModel.self) private var model
     private let registry = NotchRegistry.shared
 
+    private static let tabWidth: CGFloat = 26
+    private static let tabSpacing: CGFloat = 2
+
     var body: some View {
         let pages = registry.pages
         let selected = pages.first { $0.id == model.selectedPageID } ?? pages.first
+        let layout = tabLayout(pages: pages, selected: selected)
         VStack(spacing: 0) {
             HStack(spacing: 0) {
-                HStack(spacing: 4) {
-                    if pages.count > 1 {
-                        ForEach(pages) { page in
-                            PageTabButton(page: page, isSelected: page.id == selected?.id) {
-                                withAnimation(.notchSnappy) { model.selectedPageID = page.id }
-                            }
-                        }
-                    }
+                HStack(spacing: Self.tabSpacing) {
+                    ForEach(layout.left) { tab($0, selected: selected) }
                 }
                 Spacer(minLength: model.geometry.notchSize.width + 16)
-                Button {
-                    registry.openSettings?(nil)
-                } label: {
-                    Image(systemName: "gearshape.fill")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.55))
-                        .frame(width: 26, height: 26)
-                        .contentShape(Circle())
+                HStack(spacing: Self.tabSpacing) {
+                    ForEach(layout.right) { tab($0, selected: selected) }
+                    if !layout.overflow.isEmpty { overflowMenu(layout.overflow, selected: selected) }
+                    ForEach(registry.headerAccessories) { $0.content().frame(width: Self.tabWidth, height: 24) }
+                    Button {
+                        registry.openSettings?(nil)
+                    } label: {
+                        Image(systemName: "gearshape.fill")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.55))
+                            .frame(width: Self.tabWidth, height: 26)
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
             .frame(height: model.geometry.notchSize.height)
             .padding(.horizontal, NotchLayout.horizontalContentPadding - 6)
@@ -192,6 +195,53 @@ struct ExpandedNotchView: View {
         }
         .foregroundStyle(.white)
     }
+
+    private func tab(_ page: NotchPage, selected: NotchPage?) -> some View {
+        PageTabButton(page: page, isSelected: page.id == selected?.id) {
+            withAnimation(.notchSnappy) { model.selectedPageID = page.id }
+        }
+    }
+
+    private func overflowMenu(_ pages: [NotchPage], selected: NotchPage?) -> some View {
+        let isSelected = pages.contains { $0.id == selected?.id }
+        return Menu {
+            ForEach(pages) { page in
+                Button { withAnimation(.notchSnappy) { model.selectedPageID = page.id } } label: {
+                    Label(page.title, systemImage: page.symbol)
+                }
+            }
+        } label: {
+            Image(systemName: isSelected ? (selected?.symbol ?? "ellipsis") : "ellipsis")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(isSelected ? .white : .white.opacity(0.45))
+                .frame(width: Self.tabWidth, height: 24)
+                .background(isSelected ? .white.opacity(0.14) : .clear, in: Capsule())
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+    }
+
+    /// Tabs fill the space left of the camera first, then right of it before the header buttons;
+    /// whatever still does not fit goes into a "More" menu.
+    private func tabLayout(pages: [NotchPage], selected: NotchPage?) -> (left: [NotchPage], right: [NotchPage], overflow: [NotchPage]) {
+        guard pages.count > 1 else { return ([], [], []) }
+        let open = NotchLayout.openSize(geometry: model.geometry, page: selected)
+        let side = (open.width - model.geometry.notchSize.width - 16) / 2 - (NotchLayout.horizontalContentPadding - 6)
+        let slot = Self.tabWidth + Self.tabSpacing
+        let leftCapacity = max(1, Int(side / slot))
+        let reserved = CGFloat(registry.headerAccessories.count + 1) * slot
+        let rightCapacity = max(0, Int((side - reserved) / slot))
+        if pages.count <= leftCapacity + rightCapacity {
+            let left = Array(pages.prefix(leftCapacity))
+            return (left, Array(pages.dropFirst(left.count)), [])
+        }
+        let left = Array(pages.prefix(leftCapacity))
+        let rest = Array(pages.dropFirst(leftCapacity))
+        let rightCount = max(0, rightCapacity - 1)
+        return (left, Array(rest.prefix(rightCount)), Array(rest.dropFirst(rightCount)))
+    }
 }
 
 private struct PageTabButton: View {
@@ -204,7 +254,7 @@ private struct PageTabButton: View {
             Image(systemName: page.symbol)
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(isSelected ? .white : .white.opacity(0.45))
-                .frame(width: 30, height: 24)
+                .frame(width: 26, height: 24)
                 .background(isSelected ? .white.opacity(0.14) : .clear, in: Capsule())
                 .contentShape(Capsule())
         }

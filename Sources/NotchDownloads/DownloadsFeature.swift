@@ -16,7 +16,7 @@ public final class DownloadsFeature: NotchFeature {
 
     public func start() {
         let registry = NotchRegistry.shared
-        registry.register(settingsPane: SettingsPane(id: "downloads", title: "Downloads", symbol: "arrow.down.circle.fill", color: .cyan, order: 75) {
+        registry.register(settingsPane: SettingsPane(id: "downloads", title: "Downloads", symbol: "arrow.down.circle.fill", color: .cyan, category: .liveActivities, order: 75) {
             DownloadsSettingsView()
         })
         registry.register(permission: Self.permission)

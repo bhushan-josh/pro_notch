@@ -270,16 +270,25 @@ struct NowPlayingWidget: View {
     @AppStorage(MediaSettings.leftControl) private var leftControl
     @AppStorage(MediaSettings.rightControl) private var rightControl
     @AppStorage(MediaSettings.disableArtworkFlip) private var disableFlip
+    private let lyricsManager = LyricsManager.shared
+    @State private var showsLyrics = false
 
     var body: some View {
         Group {
             if manager.hasMedia {
-                content
+                if showsLyrics, let lyrics = lyricsManager.lyrics {
+                    LyricsScrollView(lyrics: lyrics) { withAnimation(.notchSnappy) { showsLyrics = false } }
+                        .transition(.opacity)
+                } else {
+                    content
+                        .transition(.opacity)
+                }
             } else {
                 NotPlayingView()
             }
         }
         .contextMenu { MediaContextMenu() }
+        .onChange(of: manager.track?.identity) { showsLyrics = false }
     }
 
     private var content: some View {
@@ -297,7 +306,15 @@ struct NowPlayingWidget: View {
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(secondary)
                         .lineLimit(1)
+                    if let lyrics = lyricsManager.lyrics {
+                        WidgetLyricLine(lyrics: lyrics, color: .white.opacity(0.9)) {
+                            withAnimation(.notchSnappy) { showsLyrics = true }
+                        }
+                        .padding(.top, 2)
+                        .transition(.opacity)
+                    }
                 }
+                .animation(.easeInOut(duration: 0.3), value: lyricsManager.lyrics != nil)
                 .padding(.leading, 14)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 IslandWaveform(isPlaying: manager.isPlaying, fill: tint)

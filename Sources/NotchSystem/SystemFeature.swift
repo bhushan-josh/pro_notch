@@ -13,13 +13,13 @@ public final class SystemFeature: NotchFeature {
         let registry = NotchRegistry.shared
         let battery = battery, connectivity = connectivity, focus = focus
 
-        registry.register(settingsPane: SettingsPane(id: "battery", title: "Battery", symbol: "battery.100percent.bolt", color: .green, order: 30) {
+        registry.register(settingsPane: SettingsPane(id: "battery", title: "Battery", symbol: "battery.100percent.bolt", color: .green, category: .notifications, order: 30) {
             BatterySettingsView(monitor: battery.monitor)
         })
-        registry.register(settingsPane: SettingsPane(id: "connectivity", title: "Connectivity", symbol: "airpodspro", color: .blue, order: 40) {
+        registry.register(settingsPane: SettingsPane(id: "connectivity", title: "Connectivity", symbol: "airpodspro", color: .blue, category: .notifications, order: 40) {
             ConnectivitySettingsView(controller: connectivity)
         })
-        registry.register(settingsPane: SettingsPane(id: "focus", title: "Focus", symbol: "moon.fill", color: .indigo, order: 50) {
+        registry.register(settingsPane: SettingsPane(id: "focus", title: "Focus", symbol: "moon.fill", color: .indigo, category: .notifications, order: 50) {
             FocusSettingsView(controller: focus)
         })
 

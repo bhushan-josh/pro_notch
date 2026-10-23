@@ -15,7 +15,7 @@ public final class LockFeature: NotchFeature {
 
     public func start() {
         let registry = NotchRegistry.shared
-        registry.register(settingsPane: SettingsPane(id: "lockScreen", title: "Lock Screen", symbol: "lock.fill", color: .teal, order: 70) {
+        registry.register(settingsPane: SettingsPane(id: "lockScreen", title: "Lock Screen", symbol: "lock.fill", color: .teal, category: .liveActivities, order: 70) {
             [weather, window] in
             LockSettingsView(weather: weather, onPreview: { window.preview() })
         })

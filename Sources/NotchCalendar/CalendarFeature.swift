@@ -17,7 +17,7 @@ public final class CalendarFeature: NotchFeature {
     public func start() {
         let registry = NotchRegistry.shared
         let timeToLeave = timeToLeave
-        registry.register(settingsPane: SettingsPane(id: "calendar", title: "Calendar", symbol: "calendar", color: .red, order: 60) {
+        registry.register(settingsPane: SettingsPane(id: "calendar", title: "Calendar", symbol: "calendar", color: .red, category: .liveActivities, order: 60) {
             CalendarSettingsView(timeToLeave: timeToLeave)
         })
         registry.register(permission: manager.permission)

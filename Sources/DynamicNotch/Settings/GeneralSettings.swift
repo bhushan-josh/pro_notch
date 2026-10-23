@@ -7,13 +7,13 @@ import SwiftUI
 enum GeneralSettings {
     static func registerPanes() {
         let registry = NotchRegistry.shared
-        registry.register(settingsPane: SettingsPane(id: "general", title: "General", symbol: "gearshape.fill", color: .gray, order: 0) {
+        registry.register(settingsPane: SettingsPane(id: "general", title: "General", symbol: "gearshape.fill", color: .gray, category: .general, order: 0) {
             GeneralSettingsView()
         })
-        registry.register(settingsPane: SettingsPane(id: "permissions", title: "Permissions", symbol: "hand.raised.fill", color: .blue, order: 900) {
+        registry.register(settingsPane: SettingsPane(id: "permissions", title: "Permissions", symbol: "hand.raised.fill", color: .blue, category: .app, order: 900) {
             PermissionsSettingsView()
         })
-        registry.register(settingsPane: SettingsPane(id: "about", title: "About", symbol: "info.circle.fill", color: .secondary, order: 1000) {
+        registry.register(settingsPane: SettingsPane(id: "about", title: "About", symbol: "info.circle.fill", color: .secondary, category: .app, order: 1000) {
             AboutSettingsView()
         })
     }

@@ -8,6 +8,11 @@ enum MediaKey: Int, Sendable {
     case brightnessUp = 2
     case brightnessDown = 3
     case mute = 7
+    case play = 16
+    case next = 17
+    case previous = 18
+    case fast = 19
+    case rewind = 20
     case illuminationUp = 21
     case illuminationDown = 22
     case illuminationToggle = 23

@@ -46,20 +46,40 @@ public struct HomeWidget: Identifiable {
     }
 }
 
+/// Sidebar group a settings pane is listed under, in display order.
+public enum SettingsCategory: Int, CaseIterable, Identifiable, Sendable {
+    case general, notifications, liveActivities, app
+
+    public var id: Int { rawValue }
+
+    /// Header shown above the group; `nil` lists the panes without one.
+    public var title: String? {
+        switch self {
+        case .general: nil
+        case .notifications: "Notifications"
+        case .liveActivities: "Live Activities"
+        case .app: "Dynamic Notch"
+        }
+    }
+}
+
 public struct SettingsPane: Identifiable {
     public let id: String
     public var title: String
     public var symbol: String
     /// SF Symbol tile color in the settings sidebar.
     public var color: Color
+    public var category: SettingsCategory
+    /// Position within its category.
     public var order: Int
     public var content: () -> AnyView
 
-    public init(id: String, title: String, symbol: String, color: Color, order: Int, @ViewBuilder content: @escaping () -> some View) {
+    public init(id: String, title: String, symbol: String, color: Color, category: SettingsCategory, order: Int, @ViewBuilder content: @escaping () -> some View) {
         self.id = id
         self.title = title
         self.symbol = symbol
         self.color = color
+        self.category = category
         self.order = order
         self.content = { AnyView(content()) }
     }
@@ -107,6 +127,24 @@ public struct PermissionRequirement: Identifiable {
     }
 }
 
+/// Hardware media keys (F7-F9 and friends) the notch's player can claim.
+public enum MediaTransportKey: Sendable {
+    case playPause, next, previous, fastForward, rewind
+}
+
+/// A small control in the expanded island's header, beside the settings button.
+public struct HeaderAccessory: Identifiable {
+    public let id: String
+    public var order: Int
+    public var content: () -> AnyView
+
+    public init(id: String, order: Int, @ViewBuilder content: @escaping () -> some View) {
+        self.id = id
+        self.order = order
+        self.content = { AnyView(content()) }
+    }
+}
+
 public enum SwipeDirection: Sendable {
     case left, right, up, down
 }
@@ -127,6 +165,20 @@ public final class NotchRegistry {
     @ObservationIgnored public private(set) var swipeHandlers: [(SwipeDirection) -> Bool] = []
 
     @ObservationIgnored public var openSettings: (@MainActor (_ paneID: String?) -> Void)?
+
+    /// Claims a hardware media key; return true to consume it. Runs inside the key event tap, so it must
+    /// decide from cached state and do any real work asynchronously.
+    @ObservationIgnored public var mediaKeyHandler: (@MainActor (MediaTransportKey) -> Bool)?
+
+    public private(set) var headerAccessories: [HeaderAccessory] = []
+
+    public func register(headerAccessory: HeaderAccessory) {
+        headerAccessories.removeAll { $0.id == headerAccessory.id }
+        headerAccessories.append(headerAccessory)
+        headerAccessories.sort { $0.order < $1.order }
+    }
+
+    public func unregister(headerAccessoryID: String) { headerAccessories.removeAll { $0.id == headerAccessoryID } }
 
     private init() {}
 

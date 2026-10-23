@@ -26,7 +26,7 @@ public final class HUDFeature: NotchFeature {
     public func start() {
         let registry = NotchRegistry.shared
         registry.register(permission: MediaKeyManager.permission)
-        registry.register(settingsPane: SettingsPane(id: "hud", title: "HUD", symbol: "speaker.wave.2.fill", color: .orange, order: 20) {
+        registry.register(settingsPane: SettingsPane(id: "hud", title: "HUD", symbol: "speaker.wave.2.fill", color: .orange, category: .notifications, order: 20) {
             [outputs, volume] in HUDSettingsView(outputs: outputs, volume: volume)
         })
 
@@ -113,6 +113,26 @@ public final class HUDFeature: NotchFeature {
 
     // MARK: Media keys
 
+    /// Keys whose key-down the notch's player claimed, so the matching key-up is swallowed too.
+    private var claimedTransportKeys = Set<Int>()
+
+    /// Play/pause, next and previous go to the notch's player when it has something, otherwise to macOS.
+    private func handleTransport(_ event: MediaKeyEvent) -> Bool {
+        let code = event.key.rawValue
+        guard event.isDown else { return claimedTransportKeys.remove(code) != nil }
+        if event.isRepeat { return claimedTransportKeys.contains(code) }
+        let key: MediaTransportKey = switch event.key {
+        case .play: .playPause
+        case .next: .next
+        case .previous: .previous
+        case .fast: .fastForward
+        default: .rewind
+        }
+        guard NotchRegistry.shared.mediaKeyHandler?(key) == true else { return false }
+        claimedTransportKeys.insert(code)
+        return true
+    }
+
     private func handle(_ event: MediaKeyEvent) -> Bool {
         let replace = replaceSystemHUD
         // Runs inside the event tap: decide from cached state only and defer the work so the tap returns fast.
@@ -135,6 +155,9 @@ public final class HUDFeature: NotchFeature {
             }
             if event.isDown { DispatchQueue.main.async { [weak self] in self?.adjustBrightness(event) } }
             return true
+
+        case .play, .next, .previous, .fast, .rewind:
+            return handleTransport(event)
 
         case .illuminationUp, .illuminationDown, .illuminationToggle:
             guard enabledKinds.contains(.keyboard), keyboard.isAvailable else { return false }

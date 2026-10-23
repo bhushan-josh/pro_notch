@@ -103,6 +103,11 @@ public enum MediaSettings {
     public static let hideWhileSourceAppIsActive = SettingKey("nowPlaying.hideWhileSourceAppIsActive", default: false)
     public static let replaceWaveformDuringFocus = SettingKey("nowPlaying.replaceWaveformDuringFocus", default: true)
     public static let lockScreenVolumeControl = SettingKey("lockScreen.nowPlaying.showVolumeControl", default: false)
+    public static let handleMediaKeys = SettingKey("nowPlaying.handleMediaKeys", default: true)
+    public static let showLyrics = SettingKey("nowPlaying.showLyrics", default: true)
+    public static let lyricsUnderNotch = SettingKey("nowPlaying.lyricsUnderNotch", default: false)
+    /// Seconds; positive shows each line later.
+    public static let lyricsOffset = SettingKey("nowPlaying.lyricsOffset", default: 0.0)
 
     static let audioCaptureConfirmed = SettingKey("nowPlaying.internal.audioCaptureConfirmed", default: false)
 

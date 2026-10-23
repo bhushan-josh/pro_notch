@@ -36,8 +36,8 @@ public struct NotchGeometry: Equatable, Sendable {
 }
 
 public enum NotchLayout {
-    public static let expandedWidth: CGFloat = 404
-    public static let expandedContentHeight: CGFloat = 158
+    public static let expandedWidth: CGFloat = 375
+    public static let expandedContentHeight: CGFloat = 150
     /// Inset between the island edge and wing content.
     public static let wingPadding: CGFloat = 9
     /// Gap kept clear on each side of the camera.
@@ -46,10 +46,10 @@ public enum NotchLayout {
     public static let hoverScale: CGFloat = 1.075
     public static let pressScale: CGFloat = 0.94
 
-    public static func topRadius(open: Bool) -> CGFloat { open ? 12 : 6 }
+    public static func topRadius(open: Bool) -> CGFloat { open ? 24 : 6 }
 
     public static func bottomRadius(open: Bool, hovering: Bool, activity: LiveActivity?) -> CGFloat {
-        if open { return 24 }
+        if open { return 36 }
         if let activity, activity.bottomHeight > 0 { return 19 }
         return hovering ? 13 : 12
     }
@@ -74,7 +74,7 @@ public enum NotchLayout {
 
     public static func openSize(geometry: NotchGeometry) -> CGSize {
         CGSize(
-            width: max(expandedWidth, geometry.notchSize.width + 200),
+            width: max(expandedWidth, geometry.notchSize.width + 130),
             height: geometry.notchSize.height + expandedContentHeight
         )
     }

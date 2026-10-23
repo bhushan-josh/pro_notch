@@ -1,11 +1,16 @@
 import AppKit
 import NotchCalendar
+import NotchClipboard
 import NotchCore
 import NotchDownloads
 import NotchHUD
+import NotchKeepAwake
 import NotchLock
 import NotchMedia
+import NotchPrivacy
+import NotchStats
 import NotchSystem
+import NotchTimers
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -16,6 +21,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         CalendarFeature(),
         LockFeature(),
         DownloadsFeature(),
+        TimersFeature(),
+        PrivacyFeature(),
+        ClipboardFeature(),
+        StatsFeature(),
+        KeepAwakeFeature(),
     ]
     private let statusItem = StatusItemController()
     private let settingsWindow = SettingsWindowController()

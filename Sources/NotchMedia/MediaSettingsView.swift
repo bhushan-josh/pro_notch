@@ -17,6 +17,10 @@ struct MediaSettingsView: View {
     @AppStorage(MediaSettings.hideWhileSourceAppIsActive) private var hideWhileActive
     @AppStorage(MediaSettings.replaceWaveformDuringFocus) private var replaceDuringFocus
     @AppStorage(MediaSettings.lockScreenVolumeControl) private var lockVolume
+    @AppStorage(MediaSettings.handleMediaKeys) private var handleMediaKeys
+    @AppStorage(MediaSettings.showLyrics) private var showLyrics
+    @AppStorage(MediaSettings.lyricsUnderNotch) private var lyricsUnderNotch
+    @AppStorage(MediaSettings.lyricsOffset) private var lyricsOffset
 
     private let live = LiveWaveform.shared
 
@@ -77,12 +81,32 @@ struct MediaSettingsView: View {
             }
 
             Section("Controls") {
+                SettingsToggle(
+                    "Control with Media Keys",
+                    info: "Play/pause, next and previous keys control what the notch is showing, including browser tabs.",
+                    isOn: $handleMediaKeys
+                )
                 Picker("Left Button", selection: $leftControl) {
                     ForEach(MediaExtraControl.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
                 Picker("Right Button", selection: $rightControl) {
                     ForEach(MediaExtraControl.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
+            }
+
+            Section {
+                SettingsToggle("Show Lyrics", info: "Synced lyrics for the current song in the Now Playing widget.", isOn: $showLyrics)
+                if showLyrics {
+                    SettingsToggle("Live Lyrics Under the Notch", info: "Show the current line below the closed notch while music plays.", isOn: $lyricsUnderNotch)
+                    SettingsSlider("Lyrics Timing", value: $lyricsOffset, in: -2...2, step: 0.1, format: { value in
+                        abs(value) < 0.05 ? "0s" : String(format: "%+.1fs", value)
+                    })
+                }
+            } header: {
+                Text("Lyrics")
+            } footer: {
+                Text("Lyrics are provided by LRCLIB (lrclib.net), a free community lyrics database. The song's title, artist, album and length are sent to look them up. Raise Lyrics Timing if lines appear too early.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
 
             Section("Lock Screen") {

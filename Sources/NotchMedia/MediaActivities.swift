@@ -33,6 +33,7 @@ enum MediaActivities {
 @Observable
 final class MediaIdleProvider: IdleActivityProvider {
     @ObservationIgnored private let manager: MediaManager
+    @ObservationIgnored private let lyrics = LyricsManager.shared
 
     init(manager: MediaManager) {
         self.manager = manager
@@ -40,7 +41,9 @@ final class MediaIdleProvider: IdleActivityProvider {
 
     var idleActivity: LiveActivity? {
         guard manager.showsIdleActivity else { return nil }
-        return MediaActivities.wings(id: MediaActivities.idleID, priority: .idle, duration: nil)
+        let activity = MediaActivities.wings(id: MediaActivities.idleID, priority: .idle, duration: nil)
+        guard lyrics.showsUnderNotch, manager.isPlaying, lyrics.lyrics?.isSynced == true else { return activity }
+        return activity.withBottom(height: 26) { LyricsStrip() }
     }
 
     var idleActivityUpdatedAt: Date { manager.lastChangeAt }

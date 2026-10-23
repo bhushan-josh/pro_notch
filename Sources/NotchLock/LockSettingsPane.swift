@@ -68,7 +68,11 @@ struct LockSettingsView: View {
                 Picker("Temperature Unit", selection: $weatherUnit) {
                     ForEach(TemperatureUnitPreference.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
-                TextField("Manual Location", text: $manualLocation, prompt: Text("City name, e.g. Lisbon"))
+                LabeledContent("Manual Location") {
+                    TextField("Manual Location", text: $manualLocation, prompt: Text("City name, e.g. Lisbon"))
+                        .labelsHidden()
+                        .frame(width: 220)
+                }
                 WeatherStatusRow(weather: weather)
             } header: {
                 Text("Weather")

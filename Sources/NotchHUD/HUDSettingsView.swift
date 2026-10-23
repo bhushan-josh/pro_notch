@@ -69,7 +69,7 @@ struct HUDSettingsView: View {
                 LabeledContent("Output Volume") {
                     HStack {
                         Image(systemName: "speaker.fill").foregroundStyle(.secondary)
-                        Slider(value: volumeBinding, in: 0...1).frame(minWidth: 140)
+                        Slider(value: volumeBinding, in: 0...1).frame(minWidth: 140, idealWidth: 220)
                         Image(systemName: "speaker.wave.3.fill").foregroundStyle(.secondary)
                     }
                     .disabled(!volume.canSetVolume)
