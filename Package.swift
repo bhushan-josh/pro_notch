@@ -6,10 +6,10 @@ let swiftSettings: [SwiftSetting] = [
 ]
 
 let package = Package(
-    name: "DynamicNotch",
+    name: "ProNotch",
     platforms: [.macOS(.v15)],
     products: [
-        .executable(name: "DynamicNotch", targets: ["DynamicNotch"]),
+        .executable(name: "ProNotch", targets: ["ProNotch"]),
     ],
     targets: [
         .target(name: "NotchCore", swiftSettings: swiftSettings),
@@ -28,7 +28,7 @@ let package = Package(
         .target(name: "NotchKeepAwake", dependencies: ["NotchCore"], swiftSettings: swiftSettings),
 
         .executableTarget(
-            name: "DynamicNotch",
+            name: "ProNotch",
             dependencies: [
                 "NotchCore", "NotchMedia", "NotchHUD", "NotchSystem",
                 "NotchLock", "NotchCalendar", "NotchDownloads",

@@ -77,7 +77,7 @@ struct NotchRootView: View {
     private var contextMenu: some View {
         Button("Settings…") { registry.openSettings?(nil) }
         Divider()
-        Button("Quit Dynamic Notch") { NSApp.terminate(nil) }
+        Button("Quit Pro Notch") { NSApp.terminate(nil) }
     }
 }
 

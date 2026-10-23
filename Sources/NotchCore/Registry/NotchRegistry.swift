@@ -58,7 +58,7 @@ public enum SettingsCategory: Int, CaseIterable, Identifiable, Sendable {
         case .general: nil
         case .notifications: "Notifications"
         case .liveActivities: "Live Activities"
-        case .app: "Dynamic Notch"
+        case .app: "Pro Notch"
         }
     }
 }

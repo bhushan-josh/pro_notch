@@ -9,7 +9,7 @@ final class MicrophoneMonitor {
 
     private static let system = AudioObjectID(kAudioObjectSystemObject)
     /// The app's own process tap shows up as a private aggregate device with input streams.
-    private static let ownDevicePrefix = "Dynamic Notch"
+    private static let ownDevicePrefix = "Pro Notch"
 
     private var deviceListListener: AudioPropertyListener?
     private var deviceListeners: [AudioObjectID: AudioPropertyListener] = [:]

@@ -17,7 +17,7 @@ final class KeepAwake {
         let result = IOPMAssertionCreateWithName(
             kIOPMAssertionTypePreventUserIdleDisplaySleep as CFString,
             IOPMAssertionLevel(kIOPMAssertionLevelOn),
-            "Dynamic Notch keeps the lock screen awake while media plays" as CFString,
+            "Pro Notch keeps the lock screen awake while media plays" as CFString,
             &id
         )
         if result == kIOReturnSuccess { assertionID = id }

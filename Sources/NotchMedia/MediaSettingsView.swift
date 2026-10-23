@@ -146,7 +146,7 @@ private struct PlayersSection: View {
         } header: {
             Text("Players")
         } footer: {
-            Text("Browsers only let other apps read a tab after you allow it once. Each player also asks for permission the first time Dynamic Notch connects.")
+            Text("Browsers only let other apps read a tab after you allow it once. Each player also asks for permission the first time Pro Notch connects.")
                 .font(.caption).foregroundStyle(.secondary)
         }
         .id(refresh)
@@ -178,7 +178,7 @@ private struct PlayersSection: View {
         let status = access.statuses[browser]
         if status?.running == false { return "Open \(browser.name) to test it." }
         if status?.automationAllowed == false {
-            return "Allow Dynamic Notch to control \(browser.name) in System Settings > Privacy & Security > Automation."
+            return "Allow Pro Notch to control \(browser.name) in System Settings > Privacy & Security > Automation."
         }
         if status?.javaScriptAllowed == true { return "Ready. Media in any tab is detected." }
         return browser.setupHint
@@ -196,7 +196,7 @@ private struct PlayersSection: View {
     private var musicDetail: String {
         switch musicStatus {
         case .granted: "Ready. Controlled while Music is open."
-        case .denied: "Allow Dynamic Notch to control Music in System Settings > Privacy & Security > Automation."
+        case .denied: "Allow Pro Notch to control Music in System Settings > Privacy & Security > Automation."
         case .notDetermined: "Test asks for permission to read and control Music."
         }
     }

@@ -16,7 +16,7 @@ final class SettingsWindowController {
                 backing: .buffered,
                 defer: false
             )
-            window.title = "Dynamic Notch Settings"
+            window.title = "Pro Notch Settings"
             window.titleVisibility = .hidden
             window.titlebarAppearsTransparent = true
             // An empty unified toolbar gives the taller titlebar the pane header lines up with.
@@ -143,7 +143,7 @@ private struct SettingsSidebar: View {
                 Button {
                     NSApp.terminate(nil)
                 } label: {
-                    Label("Quit Dynamic Notch", systemImage: "power")
+                    Label("Quit Pro Notch", systemImage: "power")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)

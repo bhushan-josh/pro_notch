@@ -148,7 +148,7 @@ public final class DownloadsFeature: NotchFeature {
     static let permission = PermissionRequirement(
         id: "downloads.folder",
         title: "Downloads Folder",
-        description: "Lets Dynamic Notch show what is downloading and open finished files.",
+        description: "Lets Pro Notch show what is downloading and open finished files.",
         symbol: "arrow.down.circle",
         settingsURL: URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_FilesAndFolders"),
         status: { canReadDownloads ? .granted : .notDetermined },

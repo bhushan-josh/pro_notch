@@ -3,12 +3,12 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleDevelopmentRegion</key><string>en</string>
-	<key>CFBundleExecutable</key><string>DynamicNotch</string>
+	<key>CFBundleExecutable</key><string>ProNotch</string>
 	<key>CFBundleIconFile</key><string>AppIcon</string>
 	<key>CFBundleIdentifier</key><string>com.personal.DynamicNotch</string>
 	<key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
-	<key>CFBundleName</key><string>Dynamic Notch</string>
-	<key>CFBundleDisplayName</key><string>Dynamic Notch</string>
+	<key>CFBundleName</key><string>Pro Notch</string>
+	<key>CFBundleDisplayName</key><string>Pro Notch</string>
 	<key>CFBundlePackageType</key><string>APPL</string>
 	<key>CFBundleShortVersionString</key><string>1.0.0</string>
 	<key>CFBundleVersion</key><string>1</string>
@@ -17,7 +17,7 @@
 		<dict>
 			<key>CFBundleTypeRole</key><string>Editor</string>
 			<key>CFBundleURLName</key><string>com.personal.DynamicNotch</string>
-			<key>CFBundleURLSchemes</key><array><string>dynamicnotch</string></array>
+			<key>CFBundleURLSchemes</key><array><string>pronotch</string></array>
 		</dict>
 	</array>
 	<key>LSApplicationCategoryType</key><string>public.app-category.productivity</string>
@@ -25,12 +25,12 @@
 	<key>LSUIElement</key><true/>
 	<key>NSPrincipalClass</key><string>NSApplication</string>
 	<key>NSHighResolutionCapable</key><true/>
-	<key>NSAppleEventsUsageDescription</key><string>Dynamic Notch controls and displays the music playing in Music, Spotify and your browser.</string>
-	<key>NSAudioCaptureUsageDescription</key><string>Dynamic Notch listens to system audio output to draw the live waveform.</string>
-	<key>NSBluetoothAlwaysUsageDescription</key><string>Dynamic Notch shows your connected audio devices and their battery levels.</string>
-	<key>NSCalendarsFullAccessUsageDescription</key><string>Dynamic Notch shows your upcoming events.</string>
-	<key>NSCalendarsUsageDescription</key><string>Dynamic Notch shows your upcoming events.</string>
-	<key>NSLocationUsageDescription</key><string>Dynamic Notch uses your location for local weather and travel time to events.</string>
-	<key>NSLocationWhenInUseUsageDescription</key><string>Dynamic Notch uses your location for local weather and travel time to events.</string>
+	<key>NSAppleEventsUsageDescription</key><string>Pro Notch controls and displays the music playing in Music, Spotify and your browser.</string>
+	<key>NSAudioCaptureUsageDescription</key><string>Pro Notch listens to system audio output to draw the live waveform.</string>
+	<key>NSBluetoothAlwaysUsageDescription</key><string>Pro Notch shows your connected audio devices and their battery levels.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key><string>Pro Notch shows your upcoming events.</string>
+	<key>NSCalendarsUsageDescription</key><string>Pro Notch shows your upcoming events.</string>
+	<key>NSLocationUsageDescription</key><string>Pro Notch uses your location for local weather and travel time to events.</string>
+	<key>NSLocationWhenInUseUsageDescription</key><string>Pro Notch uses your location for local weather and travel time to events.</string>
 </dict>
 </plist>

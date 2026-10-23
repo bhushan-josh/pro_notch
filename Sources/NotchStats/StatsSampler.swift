@@ -49,7 +49,7 @@ final class StatsSampler: @unchecked Sendable {
         var nice: UInt32
     }
 
-    private let queue = DispatchQueue(label: "DynamicNotch.stats", qos: .utility)
+    private let queue = DispatchQueue(label: "ProNotch.stats", qos: .utility)
     private let deliver: @Sendable (StatsSample) -> Void
     private let host = mach_host_self()
     private let pageSize: UInt64

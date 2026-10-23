@@ -57,7 +57,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {
-        for url in urls where url.scheme == "dynamicnotch" {
+        for url in urls where url.scheme == "pronotch" {
             switch url.host {
             case "settings": settingsWindow.show(pane: url.pathComponents.dropFirst().first)
             case "open": NotchManager.shared.activeModel?.open()

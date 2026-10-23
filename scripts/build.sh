@@ -1,5 +1,5 @@
 #!/bin/bash
-# Builds "Dynamic Notch.app" into ./build. Usage: scripts/build.sh [--run | --install] [--debug]
+# Builds "Pro Notch.app" into ./build. Usage: scripts/build.sh [--run | --install] [--debug]
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -27,32 +27,32 @@ fi
 IDENTITY="${IDENTITY:--}"
 
 cd "$ROOT"
-swift build -c "$CONFIG" --product DynamicNotch
+swift build -c "$CONFIG" --product ProNotch
 BIN="$(swift build -c "$CONFIG" --show-bin-path)"
 
-APP="$ROOT/build/Dynamic Notch.app"
+APP="$ROOT/build/Pro Notch.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$BIN/DynamicNotch" "$APP/Contents/MacOS/DynamicNotch"
+cp "$BIN/ProNotch" "$APP/Contents/MacOS/ProNotch"
 cp "$ROOT/Support/Info.plist" "$APP/Contents/Info.plist"
 if [[ -f "$ROOT/Support/AppIcon.icns" ]]; then
   cp "$ROOT/Support/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
 fi
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 
-codesign --force --sign "$IDENTITY" ${KEYCHAIN_ARGS[@]+"${KEYCHAIN_ARGS[@]}"} --entitlements "$ROOT/Support/DynamicNotch.entitlements" "$APP"
+codesign --force --sign "$IDENTITY" ${KEYCHAIN_ARGS[@]+"${KEYCHAIN_ARGS[@]}"} --entitlements "$ROOT/Support/ProNotch.entitlements" "$APP"
 echo "Built $APP (signed with: $IDENTITY)"
 
 case "$ACTION" in
   run)
-    pkill -x DynamicNotch 2>/dev/null || true
+    pkill -x ProNotch 2>/dev/null || true
     open "$APP"
     ;;
   install)
-    pkill -x DynamicNotch 2>/dev/null || true
-    rm -rf "/Applications/Dynamic Notch.app"
-    ditto "$APP" "/Applications/Dynamic Notch.app"
-    open "/Applications/Dynamic Notch.app"
-    echo "Installed /Applications/Dynamic Notch.app"
+    pkill -x ProNotch 2>/dev/null || true
+    rm -rf "/Applications/Pro Notch.app"
+    ditto "$APP" "/Applications/Pro Notch.app"
+    open "/Applications/Pro Notch.app"
+    echo "Installed /Applications/Pro Notch.app"
     ;;
 esac

@@ -83,7 +83,7 @@ private struct IntroStep: View {
                     }
                     .padding(.horizontal, 26)
                 }
-            Text("Welcome to Dynamic Notch").font(.largeTitle.bold())
+            Text("Welcome to Pro Notch").font(.largeTitle.bold())
             Text("Live activities, media controls, HUDs and more, right where your camera sits.")
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)

@@ -173,7 +173,7 @@ struct AboutSettingsView: View {
             Image(nsImage: NSApp.applicationIconImage)
                 .resizable()
                 .frame(width: 96, height: 96)
-            Text("Dynamic Notch").font(.largeTitle.bold())
+            Text("Pro Notch").font(.largeTitle.bold())
             Text("Version \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev")")
                 .foregroundStyle(.secondary)
             Text("A personal Dynamic Island for the Mac notch.")

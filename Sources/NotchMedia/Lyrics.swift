@@ -117,7 +117,7 @@ enum LRCLIB {
 
     private static let session: URLSession = {
         let configuration = URLSessionConfiguration.ephemeral
-        configuration.httpAdditionalHeaders = ["User-Agent": "DynamicNotch/1.0 (personal)"]
+        configuration.httpAdditionalHeaders = ["User-Agent": "ProNotch/1.0 (personal)"]
         configuration.timeoutIntervalForRequest = 10
         configuration.urlCache = nil
         return URLSession(configuration: configuration)

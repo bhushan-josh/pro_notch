@@ -56,7 +56,7 @@ final class KeepAwakeManager: IdleActivityProvider {
         releaseAssertion()
         let type = Defaults[KeepAwakeSettings.keepDisplayOn] ? kIOPMAssertionTypePreventUserIdleDisplaySleep : kIOPMAssertionTypePreventUserIdleSystemSleep
         var id: IOPMAssertionID = 0
-        let result = IOPMAssertionCreateWithName(type as CFString, IOPMAssertionLevel(kIOPMAssertionLevelOn), "Dynamic Notch Keep Awake" as CFString, &id)
+        let result = IOPMAssertionCreateWithName(type as CFString, IOPMAssertionLevel(kIOPMAssertionLevelOn), "Pro Notch Keep Awake" as CFString, &id)
         guard result == kIOReturnSuccess else { return }
         assertionID = id
         isActive = true
