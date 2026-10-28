@@ -65,6 +65,15 @@ Pro Notch turns the MacBook notch into a black island that grows to show what's 
 
 <table>
   <tr>
+    <td><img src="docs/screenshots/hud-volume.png" alt="Volume HUD"></td>
+    <td><img src="docs/screenshots/hud-brightness.png" alt="Brightness HUD"></td>
+  </tr>
+</table>
+
+<p align="center"><img src="docs/screenshots/lock-screen.png" width="560" alt="Lock screen with the padlock in the notch and the Now Playing and weather widgets"></p>
+
+<table>
+  <tr>
     <td><img src="docs/screenshots/settings-general.png" alt="General settings"></td>
     <td><img src="docs/screenshots/settings-now-playing.png" alt="Now Playing settings"></td>
   </tr>
