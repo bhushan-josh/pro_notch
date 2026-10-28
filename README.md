@@ -15,9 +15,9 @@ Pro Notch turns the MacBook notch into a black island that grows to show what's 
 **In the notch**
 - **Now Playing**: artwork, controls and a live waveform for Music, Spotify and media in Brave, Chrome or Safari, plus synced lyrics under the notch.
 - **HUD**: replaces the system volume, brightness and keyboard backlight overlays, with level colors and optional percentages.
-- **Calendar**: upcoming events, a week strip or month view, meeting links and "time to leave" alerts.
+- **Calendar**: upcoming events on Home and a full month page, meeting links and "time to leave" alerts.
 - **Downloads**: a progress ring in the notch while files download, with a page listing recent downloads.
-- **Timers**: start timers from the notch and see them count down.
+- **Timers**: start timers from the notch and see them count down (turn on the tab in **Settings → Timers**).
 - **Stats**: CPU, GPU, memory, network and disk usage.
 - **Clipboard**: history of what you copied, kept between launches if you want.
 - **Keep Awake**: a button in the open notch that stops your Mac from sleeping.
@@ -26,7 +26,6 @@ Pro Notch turns the MacBook notch into a black island that grows to show what's 
 - Battery: charging, low battery and Low Power Mode alerts.
 - Connectivity: AirPods and other Bluetooth devices, with their battery levels.
 - Focus mode changes.
-- Camera and microphone in-use indicators.
 - A padlock animation when you lock and unlock.
 
 **Lock screen**
@@ -50,9 +49,22 @@ Pro Notch turns the MacBook notch into a black island that grows to show what's 
   </tr>
 </table>
 
-## Install
+## Download
 
-Pro Notch is built from source. You need:
+**[Download Pro Notch (.dmg)](https://github.com/bhushan-josh/pro_notch/releases/latest/download/ProNotch.dmg)** · requires macOS 15 Sequoia or later.
+
+1. Open `ProNotch.dmg` and drag **Pro Notch** into **Applications**.
+2. Open Pro Notch from Applications.
+
+Pro Notch isn't notarized by Apple, so the first launch is blocked with a message that macOS can't verify the app. To allow it, open **System Settings → Privacy & Security**, scroll down and click **Open Anyway** next to Pro Notch, then confirm. Or run this once in Terminal:
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/Pro Notch.app"
+```
+
+## Build from source
+
+You need:
 - macOS 15 Sequoia or later.
 - Xcode 16 or later, or the Swift 6 command line tools (`xcode-select --install`).
 
@@ -89,11 +101,13 @@ To control media in Brave, Chrome or Safari, also turn on **Allow JavaScript fro
 scripts/build.sh            # build to build/Pro Notch.app
 scripts/build.sh --run      # build and launch from build/
 scripts/build.sh --debug    # debug configuration (combine with --run or --install)
+scripts/make-dmg.sh         # build and pack build/ProNotch.dmg for a release
 ```
 
 ## Using it
 
 - **Open the notch**: hover over it, or swipe down on it.
+- **More tabs**: tabs that don't fit in the header are behind the **⋯** button.
 - **Settings**: click the gear in the open notch, or use the menu bar icon.
 - **Quit**: use **Quit Pro Notch** at the bottom of the settings sidebar, or the menu bar icon.
 
@@ -122,6 +136,5 @@ Sources/
   NotchTimers/     Timers
   NotchStats/      System stats
   NotchClipboard/  Clipboard history
-  NotchPrivacy/    Camera and microphone indicators
   NotchKeepAwake/  Keep Awake toggle
 ```
