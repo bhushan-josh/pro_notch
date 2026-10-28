@@ -12,6 +12,13 @@
 
 <p align="center"><sub>macOS 15 or later · <a href="#download">install steps</a></sub></p>
 
+> [!IMPORTANT]
+> After dragging **Pro Notch** into Applications, run this once in Terminal. Pro Notch isn't notarized, so macOS blocks it until you do:
+>
+> ```bash
+> xattr -dr com.apple.quarantine "/Applications/Pro Notch.app"
+> ```
+
 ---
 
 Pro Notch turns the MacBook notch into a black island that grows to show what's happening. Hover over it to open it, swipe it closed, and it stays out of the way the rest of the time. It's a native SwiftUI app for macOS 15 and later. On Macs without a notch it draws a simulated one.
@@ -43,6 +50,15 @@ Pro Notch turns the MacBook notch into a black island that grows to show what's 
 - Works on your built-in display or any display you choose.
 
 ## Screenshots
+
+<p align="center"><img src="docs/screenshots/island-home.png" width="720" alt="Island with the Now Playing player"></p>
+
+<table>
+  <tr>
+    <td><img src="docs/screenshots/island-calendar.png" alt="Calendar page"></td>
+    <td><img src="docs/screenshots/island-stats.png" alt="Stats page"></td>
+  </tr>
+</table>
 
 <table>
   <tr>
@@ -121,6 +137,7 @@ You can also drive it with URLs, for example from Shortcuts or a terminal:
 
 ```bash
 open "pronotch://open"               # open the notch
+open "pronotch://open/calendar"      # open it on a page (home, calendar, clipboard, stats, timers, downloads)
 open "pronotch://close"              # close it
 open "pronotch://settings/hud"       # open settings on a page
 ```

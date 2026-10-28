@@ -58,7 +58,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         for url in urls where url.scheme == "pronotch" {
             switch url.host {
             case "settings": settingsWindow.show(pane: url.pathComponents.dropFirst().first)
-            case "open": NotchManager.shared.activeModel?.open()
+            case "open":
+                let page = url.pathComponents.dropFirst().first.flatMap { id in NotchRegistry.shared.pages.first { $0.id == id }?.id }
+                NotchManager.shared.activeModel?.open(page: page)
             case "close": NotchManager.shared.closeAll()
             default: break
             }
