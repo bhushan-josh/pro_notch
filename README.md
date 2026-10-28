@@ -6,6 +6,12 @@
 
 <p align="center">A Dynamic Island for the Mac notch: live activities, media controls, HUDs and more, right where your camera sits.</p>
 
+<p align="center">
+  <a href="https://github.com/bhushan-josh/pro_notch/releases/latest/download/ProNotch.dmg"><img src="https://img.shields.io/badge/Download-ProNotch.dmg-black?style=for-the-badge&logo=apple&logoColor=white" alt="Download ProNotch.dmg"></a>
+</p>
+
+<p align="center"><sub>macOS 15 or later · <a href="#download">install steps</a></sub></p>
+
 ---
 
 Pro Notch turns the MacBook notch into a black island that grows to show what's happening. Hover over it to open it, swipe it closed, and it stays out of the way the rest of the time. It's a native SwiftUI app for macOS 15 and later. On Macs without a notch it draws a simulated one.
