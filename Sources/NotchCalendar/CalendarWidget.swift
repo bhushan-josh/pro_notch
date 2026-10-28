@@ -2,8 +2,12 @@ import NotchCore
 import SwiftUI
 
 struct CalendarWidget: View {
+    var forceMonthView = false
+
     private let manager = CalendarManager.shared
-    @AppStorage(CalendarSettings.alwaysShowMonthView) private var monthView
+    @AppStorage(CalendarSettings.alwaysShowMonthView) private var monthSetting
+
+    private var monthView: Bool { forceMonthView || monthSetting }
 
     var body: some View {
         GeometryReader { proxy in

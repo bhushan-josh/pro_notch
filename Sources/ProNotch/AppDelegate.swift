@@ -7,7 +7,6 @@ import NotchHUD
 import NotchKeepAwake
 import NotchLock
 import NotchMedia
-import NotchPrivacy
 import NotchStats
 import NotchSystem
 import NotchTimers
@@ -22,7 +21,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         LockFeature(),
         DownloadsFeature(),
         TimersFeature(),
-        PrivacyFeature(),
         ClipboardFeature(),
         StatsFeature(),
         KeepAwakeFeature(),

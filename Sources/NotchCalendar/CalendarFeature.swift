@@ -3,6 +3,8 @@ import SwiftUI
 
 @MainActor
 public final class CalendarFeature: NotchFeature {
+    public static let pageID = "calendar"
+
     private let manager = CalendarManager.shared
     private let activities: CalendarActivities
     private let timeToLeave: TimeToLeave
@@ -50,6 +52,7 @@ public final class CalendarFeature: NotchFeature {
             NotchRegistry.shared.unregister(homeWidgetID: "calendar")
             widgetRegistered = false
         }
+        removePage()
     }
 
     private func apply() {
@@ -59,6 +62,17 @@ public final class CalendarFeature: NotchFeature {
                 registry.register(homeWidget: HomeWidget(id: "calendar", kind: .calendar) { CalendarWidget() })
                 widgetRegistered = true
             }
+            if !registry.pages.contains(where: { $0.id == Self.pageID }) {
+                registry.register(page: NotchPage(
+                    id: Self.pageID,
+                    title: "Calendar",
+                    symbol: "calendar",
+                    order: 45,
+                    resize: PageResize(minSize: CGSize(width: 375, height: 180), maxSize: CGSize(width: 640, height: 480))
+                ) {
+                    CalendarWidget(forceMonthView: true)
+                })
+            }
             manager.start()
             activities.update()
         } else {
@@ -66,8 +80,16 @@ public final class CalendarFeature: NotchFeature {
                 registry.unregister(homeWidgetID: "calendar")
                 widgetRegistered = false
             }
+            removePage()
             manager.stop()
             activities.stop()
         }
+    }
+
+    private func removePage() {
+        for model in NotchManager.shared.models where model.selectedPageID == Self.pageID {
+            model.selectedPageID = NotchModel.homePageID
+        }
+        NotchRegistry.shared.unregister(pageID: Self.pageID)
     }
 }

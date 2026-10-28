@@ -28,6 +28,7 @@ public enum TimerSound: String, CaseIterable, Sendable {
 }
 
 public enum TimersSettings {
+    public static let showTab = SettingKey("timers.showTab", default: false)
     public static let showInNotch = SettingKey("timers.showInNotch", default: true)
     public static let showOnLockScreen = SettingKey("timers.showOnLockScreen", default: true)
     public static let sound = SettingKey("timers.sound", default: TimerSound.glass)

@@ -44,6 +44,9 @@ final class NotchWindowController {
     private var closeTask: Task<Void, Never>?
     private var scrollAccumulator = CGSize.zero
     private var scrollConsumed = false
+    /// A menu opened from the notch (the "More" tab menu, a context menu) sits outside the island,
+    /// so hover and outside-click handling pause and the panel leaves the overlay space until it closes.
+    private var isTrackingMenu = false
 
     init(screen: NSScreen) {
         self.screen = screen
@@ -124,6 +127,24 @@ final class NotchWindowController {
             let consumed = MainActor.assumeIsolated { self.handleScroll(event) }
             return consumed ? nil : event
         }) { monitors.append(scroll) }
+        let center = NotificationCenter.default
+        observers.append(center.addObserver(forName: NSMenu.didBeginTrackingNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.model.isOpen else { return }
+                self.isTrackingMenu = true
+                self.closeTask?.cancel()
+                // Menus are ordinary windows, so they would draw under the lock screen overlay space.
+                OverlaySpace.shared.remove(self.panel)
+            }
+        })
+        observers.append(center.addObserver(forName: NSMenu.didEndTrackingNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.isTrackingMenu else { return }
+                self.isTrackingMenu = false
+                self.applyLockScreenPresence()
+                self.handleMouse(.mouseMoved)
+            }
+        })
 
 
         settingsObserver = Defaults.observe([
@@ -168,7 +189,7 @@ final class NotchWindowController {
             // The resize gesture's own end handler is skipped if its view disappears mid-drag.
             if model.isResizing { model.isResizing = false }
         }
-        if model.isResizing {
+        if model.isResizing || isTrackingMenu {
             setIgnoresMouseEvents(false)
             return
         }

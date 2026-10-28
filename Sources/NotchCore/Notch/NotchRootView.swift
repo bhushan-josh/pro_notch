@@ -147,6 +147,8 @@ struct ExpandedNotchView: View {
     private static let tabWidth: CGFloat = 26
     private static let tabSpacing: CGFloat = 2
 
+    @State private var showsOverflow = false
+
     var body: some View {
         let pages = registry.pages
         let selected = pages.first { $0.id == model.selectedPageID } ?? pages.first
@@ -177,7 +179,15 @@ struct ExpandedNotchView: View {
             .padding(.horizontal, NotchLayout.horizontalContentPadding - 6)
 
             Group {
-                if let selected {
+                if showsOverflow, !layout.overflow.isEmpty {
+                    OverflowGrid(pages: layout.overflow, selectedID: selected?.id) { page in
+                        withAnimation(.notchSnappy) {
+                            showsOverflow = false
+                            model.selectedPageID = page.id
+                        }
+                    }
+                    .transition(.opacity)
+                } else if let selected {
                     selected.content()
                         .id(selected.id)
                         .transition(.opacity)
@@ -189,58 +199,105 @@ struct ExpandedNotchView: View {
             .padding(.top, 4)
         }
         .overlay {
-            if let selected, let resize = selected.resize {
+            if !showsOverflow, let selected, let resize = selected.resize {
                 PageResizeHandles(page: selected, resize: resize)
             }
         }
+        .onChange(of: model.isOpen) { _, open in if !open { showsOverflow = false } }
+        .onChange(of: layout.overflow.isEmpty) { _, empty in if empty { showsOverflow = false } }
         .foregroundStyle(.white)
     }
 
+    private func setOverflow(_ shows: Bool) {
+        withAnimation(.notchSnappy) { showsOverflow = shows }
+    }
+
     private func tab(_ page: NotchPage, selected: NotchPage?) -> some View {
-        PageTabButton(page: page, isSelected: page.id == selected?.id) {
-            withAnimation(.notchSnappy) { model.selectedPageID = page.id }
+        PageTabButton(page: page, isSelected: !showsOverflow && page.id == selected?.id) {
+            withAnimation(.notchSnappy) {
+                showsOverflow = false
+                model.selectedPageID = page.id
+            }
         }
     }
 
+    /// Swaps the page area for a grid of the tabs that did not fit in the header.
     private func overflowMenu(_ pages: [NotchPage], selected: NotchPage?) -> some View {
         let isSelected = pages.contains { $0.id == selected?.id }
-        return Menu {
-            ForEach(pages) { page in
-                Button { withAnimation(.notchSnappy) { model.selectedPageID = page.id } } label: {
-                    Label(page.title, systemImage: page.symbol)
-                }
-            }
+        let highlighted = isSelected || showsOverflow
+        return Button {
+            setOverflow(!showsOverflow)
         } label: {
             Image(systemName: isSelected ? (selected?.symbol ?? "ellipsis") : "ellipsis")
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(isSelected ? .white : .white.opacity(0.45))
+                .foregroundStyle(highlighted ? .white : .white.opacity(0.45))
                 .frame(width: Self.tabWidth, height: 24)
-                .background(isSelected ? .white.opacity(0.14) : .clear, in: Capsule())
+                .background(highlighted ? .white.opacity(0.14) : .clear, in: Capsule())
+                .frame(width: Self.tabWidth + Self.tabSpacing, height: 30)
+                .contentShape(Rectangle())
         }
-        .menuStyle(.button)
         .buttonStyle(.plain)
-        .menuIndicator(.hidden)
-        .fixedSize()
+        .frame(width: Self.tabWidth)
     }
 
-    /// Tabs fill the space left of the camera first, then right of it before the header buttons;
-    /// whatever still does not fit goes into a "More" menu.
+    /// Home sits alone left of the camera; the other tabs go right of it before the header buttons,
+    /// and whatever does not fit goes into a "More" menu.
     private func tabLayout(pages: [NotchPage], selected: NotchPage?) -> (left: [NotchPage], right: [NotchPage], overflow: [NotchPage]) {
         guard pages.count > 1 else { return ([], [], []) }
         let open = NotchLayout.openSize(geometry: model.geometry, page: selected)
         let side = (open.width - model.geometry.notchSize.width - 16) / 2 - (NotchLayout.horizontalContentPadding - 6)
         let slot = Self.tabWidth + Self.tabSpacing
-        let leftCapacity = max(1, Int(side / slot))
         let reserved = CGFloat(registry.headerAccessories.count + 1) * slot
-        let rightCapacity = max(0, Int((side - reserved) / slot))
-        if pages.count <= leftCapacity + rightCapacity {
-            let left = Array(pages.prefix(leftCapacity))
-            return (left, Array(pages.dropFirst(left.count)), [])
-        }
-        let left = Array(pages.prefix(leftCapacity))
-        let rest = Array(pages.dropFirst(leftCapacity))
-        let rightCount = max(0, rightCapacity - 1)
+        let rightCapacity = max(1, Int((side - reserved) / slot))
+        let left = Array(pages.prefix(1))
+        let rest = Array(pages.dropFirst())
+        if rest.count <= rightCapacity { return (left, rest, []) }
+        let rightCount = rightCapacity - 1
         return (left, Array(rest.prefix(rightCount)), Array(rest.dropFirst(rightCount)))
+    }
+}
+
+private struct OverflowGrid: View {
+    let pages: [NotchPage]
+    let selectedID: String?
+    let select: (NotchPage) -> Void
+
+    var body: some View {
+        let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: min(max(pages.count, 3), 4))
+        LazyVGrid(columns: columns, spacing: 8) {
+            ForEach(pages) { page in
+                OverflowTile(page: page, isSelected: page.id == selectedID) { select(page) }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+private struct OverflowTile: View {
+    let page: NotchPage
+    let isSelected: Bool
+    let action: () -> Void
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                Image(systemName: page.symbol)
+                    .font(.system(size: 17, weight: .semibold))
+                    .frame(height: 20)
+                Text(page.title)
+                    .font(.system(size: 11, weight: .medium))
+                    .lineLimit(1)
+            }
+            .foregroundStyle(isSelected || isHovering ? .white : .white.opacity(0.6))
+            .frame(maxWidth: .infinity)
+            .frame(height: 58)
+            .background(.white.opacity(isSelected ? 0.14 : isHovering ? 0.12 : 0.07), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
+        .animation(.notchSnappy, value: isHovering)
     }
 }
 

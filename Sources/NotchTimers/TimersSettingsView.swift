@@ -2,6 +2,7 @@ import NotchCore
 import SwiftUI
 
 struct TimersSettingsView: View {
+    @AppStorage(TimersSettings.showTab) private var showTab
     @AppStorage(TimersSettings.showInNotch) private var showInNotch
     @AppStorage(TimersSettings.showOnLockScreen) private var showOnLockScreen
     @AppStorage(TimersSettings.sound) private var sound
@@ -12,6 +13,7 @@ struct TimersSettingsView: View {
     var body: some View {
         SettingsPaneView {
             Section {
+                SettingsToggle("Show Timers Tab", info: "Adds a Timers tab to the expanded notch for starting countdowns.", isOn: $showTab)
                 SettingsToggle("Show Timer in Notch", info: "Shows the countdown beside the camera while a timer runs.", isOn: $showInNotch)
                 SettingsToggle("Show on Lock Screen", info: "Adds the running timer to the lock screen widgets.", isOn: $showOnLockScreen)
             }

@@ -21,9 +21,7 @@ public final class TimersFeature: NotchFeature {
         registry.register(settingsPane: SettingsPane(id: "timers", title: "Timers", symbol: "timer", color: .orange, category: .liveActivities, order: 65) {
             TimersSettingsView()
         })
-        registry.register(page: NotchPage(id: Self.pageID, title: "Timers", symbol: "timer", order: 30) {
-            TimersPage(manager: manager)
-        })
+        updatePage()
 
         manager.onChange = { [weak self] in self?.refresh() }
         manager.onFinish = { [weak self] in self?.finished() }
@@ -31,9 +29,10 @@ public final class TimersFeature: NotchFeature {
         refresh()
 
         settingsObserver = Defaults.observe([
-            TimersSettings.showInNotch.name, TimersSettings.showOnLockScreen.name, TimersSettings.presets.name,
+            TimersSettings.showTab.name, TimersSettings.showInNotch.name, TimersSettings.showOnLockScreen.name, TimersSettings.presets.name,
         ]) { [weak self] in
             guard let self else { return }
+            self.updatePage()
             let presets = TimersSettings.presetMinutes
             if self.manager.presets != presets { self.manager.presets = presets }
             self.refresh()
@@ -50,14 +49,27 @@ public final class TimersFeature: NotchFeature {
         settingsObserver = nil
         if let wakeObserver { NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver) }
         wakeObserver = nil
+        removePage()
+        NotchRegistry.shared.unregister(lockScreenWidgetID: Self.lockWidgetID)
+        ActivityCenter.shared.dismiss(id: Self.activeActivityID)
+        ActivityCenter.shared.dismiss(id: Self.doneActivityID)
+    }
+
+    private func updatePage() {
         let registry = NotchRegistry.shared
+        guard Defaults[TimersSettings.showTab] else { return removePage() }
+        guard !registry.pages.contains(where: { $0.id == Self.pageID }) else { return }
+        let manager = manager
+        registry.register(page: NotchPage(id: Self.pageID, title: "Timers", symbol: "timer", order: 40) {
+            TimersPage(manager: manager)
+        })
+    }
+
+    private func removePage() {
         for model in NotchManager.shared.models where model.selectedPageID == Self.pageID {
             model.selectedPageID = NotchModel.homePageID
         }
-        registry.unregister(pageID: Self.pageID)
-        registry.unregister(lockScreenWidgetID: Self.lockWidgetID)
-        ActivityCenter.shared.dismiss(id: Self.activeActivityID)
-        ActivityCenter.shared.dismiss(id: Self.doneActivityID)
+        NotchRegistry.shared.unregister(pageID: Self.pageID)
     }
 
     private func refresh() {

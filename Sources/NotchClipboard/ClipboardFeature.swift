@@ -56,7 +56,7 @@ public final class ClipboardFeature: NotchFeature {
                 id: Self.pageID,
                 title: "Clipboard",
                 symbol: "doc.on.clipboard",
-                order: 40,
+                order: 30,
                 resize: PageResize(minSize: CGSize(width: 375, height: 180), maxSize: CGSize(width: 640, height: 480))
             ) {
                 ClipboardPage(store: store)
