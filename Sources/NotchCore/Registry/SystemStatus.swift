@@ -42,6 +42,20 @@ public struct WeatherSnapshot: Equatable, Sendable {
     }
 }
 
+public struct UpcomingEventInfo: Equatable, Sendable {
+    public var title: String
+    public var start: Date
+    public var end: Date
+    public var color: Color
+
+    public init(title: String, start: Date, end: Date, color: Color) {
+        self.title = title
+        self.start = start
+        self.end = end
+        self.color = color
+    }
+}
+
 /// Cross-feature state. Each property has a single writer (named on it); everyone else only reads.
 @MainActor
 @Observable
@@ -58,6 +72,8 @@ public final class SystemStatus {
     public var isMediaPlaying = false
     /// Written by NotchLock's weather manager.
     public var weather: WeatherSnapshot?
+    /// Written by NotchCalendar: the next timed event of today or tomorrow that has not ended.
+    public var nextEvent: UpcomingEventInfo?
 
     private init() {}
 }

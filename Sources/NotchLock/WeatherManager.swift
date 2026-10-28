@@ -16,6 +16,7 @@ final class WeatherManager {
     private static let locationLifetime: TimeInterval = 15 * 60
     // Owned by NotchCalendar, which this module cannot import.
     private static let calendarEnabled = SettingKey("calendar.enabled", default: true)
+    private static let idleClockShowsWeather = SettingKey("nowPlaying.showIdleClock", default: true)
     private static let calendarShowsWeather = SettingKey("calendar.showWeatherOnEmptyDay", default: true)
     private static let settingsURL = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices")
 
@@ -82,7 +83,7 @@ final class WeatherManager {
         isStarted = true
         consumerObserver = Defaults.observe([
             LockSettings.widgetsEnabled.name, LockSettings.showWeatherWidget.name,
-            Self.calendarEnabled.name, Self.calendarShowsWeather.name,
+            Self.calendarEnabled.name, Self.calendarShowsWeather.name, Self.idleClockShowsWeather.name,
         ]) { [weak self] in self?.updateActivity() }
         updateActivity()
     }
@@ -102,6 +103,7 @@ final class WeatherManager {
     private var hasConsumer: Bool {
         if isSettingsVisible { return true }
         if Defaults[LockSettings.widgetsEnabled] && Defaults[LockSettings.showWeatherWidget] { return true }
+        if Defaults[Self.idleClockShowsWeather] { return true }
         return Defaults[Self.calendarEnabled] && Defaults[Self.calendarShowsWeather]
     }
 

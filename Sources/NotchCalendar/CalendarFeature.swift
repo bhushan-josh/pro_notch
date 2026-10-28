@@ -26,6 +26,7 @@ public final class CalendarFeature: NotchFeature {
         registry.register(idleProvider: activities)
 
         manager.onUpdate = { [weak self] in
+            self?.publishNextEvent()
             self?.activities.update()
             self?.timeToLeave.update()
         }
@@ -53,6 +54,7 @@ public final class CalendarFeature: NotchFeature {
             widgetRegistered = false
         }
         removePage()
+        SystemStatus.shared.nextEvent = nil
     }
 
     private func apply() {
@@ -74,6 +76,7 @@ public final class CalendarFeature: NotchFeature {
                 })
             }
             manager.start()
+            publishNextEvent()
             activities.update()
         } else {
             if widgetRegistered {
@@ -81,9 +84,17 @@ public final class CalendarFeature: NotchFeature {
                 widgetRegistered = false
             }
             removePage()
+            SystemStatus.shared.nextEvent = nil
             manager.stop()
             activities.stop()
         }
+    }
+
+    private func publishNextEvent() {
+        let next = manager.upcomingTimedEvents.first.map {
+            UpcomingEventInfo(title: $0.title, start: $0.start, end: $0.end, color: $0.calendarColor)
+        }
+        if SystemStatus.shared.nextEvent != next { SystemStatus.shared.nextEvent = next }
     }
 
     private func removePage() {

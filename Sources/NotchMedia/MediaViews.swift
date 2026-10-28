@@ -266,6 +266,7 @@ struct ExplicitBadge: View {
 
 struct NowPlayingWidget: View {
     private let manager = MediaManager.shared
+    @AppStorage(MediaSettings.showIdleClock) private var showIdleClock
     @AppStorage(MediaSettings.colorStyle) private var colorStyle
     @AppStorage(MediaSettings.leftControl) private var leftControl
     @AppStorage(MediaSettings.rightControl) private var rightControl
@@ -283,10 +284,14 @@ struct NowPlayingWidget: View {
                     content
                         .transition(.opacity)
                 }
+            } else if showIdleClock {
+                IdleClockView()
+                    .transition(.opacity)
             } else {
                 NotPlayingView()
             }
         }
+        .animation(.notchSnappy, value: manager.hasMedia)
         .contextMenu { MediaContextMenu() }
         .onChange(of: manager.track?.identity) { showsLyrics = false }
     }

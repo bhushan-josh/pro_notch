@@ -21,6 +21,7 @@ struct MediaSettingsView: View {
     @AppStorage(MediaSettings.showLyrics) private var showLyrics
     @AppStorage(MediaSettings.lyricsUnderNotch) private var lyricsUnderNotch
     @AppStorage(MediaSettings.lyricsOffset) private var lyricsOffset
+    @AppStorage(MediaSettings.showIdleClock) private var showIdleClock
 
     private let live = LiveWaveform.shared
 
@@ -67,6 +68,7 @@ struct MediaSettingsView: View {
                 Toggle("Hide Compact Waveform", isOn: $disableCompactWaveform)
                 Toggle("Disable Artwork Flip", isOn: $disableArtworkFlip)
                 SettingsToggle("Hide Title Extras", info: "Strip suffixes like \"(Remastered 2011)\" or \"(feat. ...)\".", isOn: $hideTitleExtras)
+                SettingsToggle("Clock When Nothing Plays", info: "Show the time, weather and your next event in place of the empty player.", isOn: $showIdleClock)
             }
 
             Section {
