@@ -27,6 +27,7 @@ Pro Notch turns the MacBook notch into a black island that grows to show what's 
 
 **In the notch**
 - **Now Playing**: artwork, controls and a live waveform for Music, Spotify and media in Brave, Chrome or Safari, plus synced lyrics under the notch.
+- **Idle clock**: when nothing is playing, Home shows the time with seconds, the date, the weather and your next event. The player takes its place as soon as music starts (turn it off in **Settings → Now Playing**).
 - **HUD**: replaces the system volume, brightness and keyboard backlight overlays, with level colors and optional percentages.
 - **Calendar**: upcoming events on Home and a full month page, meeting links and "time to leave" alerts.
 - **Downloads**: a progress ring in the notch while files download, with a page listing recent downloads.
@@ -52,6 +53,8 @@ Pro Notch turns the MacBook notch into a black island that grows to show what's 
 ## Screenshots
 
 <p align="center"><img src="docs/screenshots/island-home.png" width="720" alt="Island with the Now Playing player"></p>
+
+<p align="center"><img src="docs/screenshots/island-idle.png" width="720" alt="Island showing the clock, date and weather when nothing is playing"></p>
 
 <table>
   <tr>
