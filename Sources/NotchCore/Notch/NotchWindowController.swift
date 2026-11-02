@@ -266,19 +266,23 @@ final class NotchWindowController {
         guard max(abs(dx), abs(dy)) > threshold else { return model.isOpen ? false : true }
 
         let direction: SwipeDirection = abs(dx) > abs(dy) ? (dx > 0 ? .right : .left) : (dy > 0 ? .down : .up)
+        if model.isOpen {
+            // Only an upward swipe over fixed content closes the island. Sideways swipes, downward swipes and
+            // anything over a list that can scroll belong to the page.
+            guard direction == .up, Defaults[CoreSettings.swipeToToggle], !isOverScrollableContent(event) else { return false }
+            scrollConsumed = true
+            scrollAccumulator = .zero
+            model.close()
+            return true
+        }
         scrollConsumed = true
         scrollAccumulator = .zero
         switch direction {
         case .down:
-            if Defaults[CoreSettings.swipeToToggle], !model.isOpen { model.open() }
+            if Defaults[CoreSettings.swipeToToggle] { model.open() }
         case .up:
-            if model.isOpen {
-                if Defaults[CoreSettings.swipeToToggle] { model.close() }
-            } else if Defaults[CoreSettings.swipeToDismiss] {
-                ActivityCenter.shared.dismissCurrent()
-            }
+            if Defaults[CoreSettings.swipeToDismiss] { ActivityCenter.shared.dismissCurrent() }
         case .left, .right:
-            if model.isOpen { scrollConsumed = false; return false }
             if Defaults[CoreSettings.swipeToSkip], NotchRegistry.shared.handleSwipe(direction) {
                 Haptics.perform()
             } else if Defaults[CoreSettings.swipeToCycleActivity] {
@@ -287,6 +291,22 @@ final class NotchWindowController {
             }
         }
         return true
+    }
+
+    /// SwiftUI scroll views are NSScrollViews underneath, so the pointer's view chain shows whether a swipe
+    /// lands on a list with more to scroll; such swipes scroll the list rather than closing the island.
+    private func isOverScrollableContent(_ event: NSEvent) -> Bool {
+        guard let content = panel.contentView else { return false }
+        let point = content.superview?.convert(event.locationInWindow, from: nil) ?? event.locationInWindow
+        var view = content.hitTest(point)
+        while let current = view {
+            if let scroll = current as? NSScrollView, let document = scroll.documentView,
+               document.frame.height > scroll.contentView.bounds.height + 0.5 {
+                return true
+            }
+            view = current.superview
+        }
+        return false
     }
 
     /// Called by NotchManager, which queries the window server once per space change for all displays.
