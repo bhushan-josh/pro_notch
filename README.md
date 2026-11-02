@@ -21,7 +21,7 @@
 
 ---
 
-Pro Notch turns the MacBook notch into a black island that grows to show what's happening. Hover over it to open it, swipe it closed, and it stays out of the way the rest of the time. It's a native SwiftUI app for macOS 15 and later. On Macs without a notch it draws a simulated one.
+Pro Notch turns the MacBook notch into an island that grows to show what's happening, in solid black or in glass that lets your screen show through. Hover over it to open it, swipe it closed, and it stays out of the way the rest of the time. It's a native SwiftUI app for macOS 15 and later. On Macs without a notch it draws a simulated one.
 
 ## Features
 
@@ -49,9 +49,11 @@ Pro Notch turns the MacBook notch into a black island that grows to show what's 
 - Opens on hover or with a swipe, skips tracks with sideways swipes, and gives haptic feedback.
 - Hides in fullscreen apps, in Mission Control and from screen recordings if you want.
 - Works on your built-in display or any display you choose.
-- Two looks: the classic black island, or glass that blurs what's behind it (**Settings → General**).
+- Two themes: **Classic**, a solid black island, or **Glass**, which grows out of the notch and blurs what's behind it (**Settings → General → Theme**).
 
 ## Screenshots
+
+Home, Calendar and Stats are shown in the Glass theme; Classic is the same island in solid black.
 
 <p align="center"><img src="docs/screenshots/island-home.png" width="720" alt="Island with the Now Playing player"></p>
 
