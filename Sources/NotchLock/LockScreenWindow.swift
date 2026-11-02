@@ -170,7 +170,8 @@ struct LockScreenWidgetStack: View {
         guard model.isMounted else { return [] }
         return registry.lockScreenWidgets.filter { widget in
             switch widget.id {
-            case "media": showMedia && status.isMediaPlaying
+            // Registered only while a track is loaded; a paused track stays so it can be resumed from here.
+            case "media": showMedia
             case WeatherWidget.id: showWeather && status.weather != nil
             default: true
             }

@@ -46,7 +46,7 @@ struct LockSettingsView: View {
                         ForEach(LockWidgetStyle.allCases, id: \.self) { Text($0.title).tag($0) }
                     }
                     .pickerStyle(.segmented)
-                    SettingsToggle("Now Playing", info: "Shown while music or video is playing.", isOn: $showMediaWidget)
+                    SettingsToggle("Now Playing", info: "Shown while a track is loaded, playing or paused.", isOn: $showMediaWidget)
                     Toggle("Weather", isOn: $showWeatherWidget)
                     if showWeatherWidget {
                         Picker("Weather Style", selection: $weatherStyle) {
