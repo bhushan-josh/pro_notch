@@ -14,6 +14,8 @@ final class WeatherManager {
 
     private static let refreshInterval: TimeInterval = 30 * 60
     private static let locationLifetime: TimeInterval = 15 * 60
+    /// After a failed fetch or location fix: a minute, then doubling up to this, instead of waiting for the next refresh.
+    private static let maxRetryInterval: TimeInterval = 15 * 60
     // Owned by NotchCalendar, which this module cannot import.
     private static let calendarEnabled = SettingKey("calendar.enabled", default: true)
     private static let idleClockShowsWeather = SettingKey("nowPlaying.showIdleClock", default: true)
@@ -33,6 +35,8 @@ final class WeatherManager {
     @ObservationIgnored private var consumerObserver: AnyObject?
     @ObservationIgnored private var manualDebounce: Task<Void, Never>?
     @ObservationIgnored private var fetchTask: Task<Void, Never>?
+    @ObservationIgnored private var retryTask: Task<Void, Never>?
+    @ObservationIgnored private var failures = 0
     @ObservationIgnored private var geocodeTask: Task<Void, Never>?
     @ObservationIgnored private var lastLocation: CLLocation?
     @ObservationIgnored private var lastFetch: (location: CLLocation, date: Date, fahrenheit: Bool)?
@@ -157,9 +161,24 @@ final class WeatherManager {
         manualDebounce?.cancel()
         fetchTask?.cancel()
         fetchTask = nil
+        retryTask?.cancel()
+        retryTask = nil
+        failures = 0
         geocodeTask?.cancel()
         updateSignificantChangeMonitoring()
         resumeAuthorizationWaiters()
+    }
+
+    /// The weather service and location fixes both fail transiently; a blank island for half an hour is too long to wait.
+    private func scheduleRetry() {
+        failures += 1
+        let delay = min(60 * pow(2, Double(failures - 1)), Self.maxRetryInterval)
+        retryTask?.cancel()
+        retryTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(delay))
+            guard !Task.isCancelled, let self, self.isRunning else { return }
+            self.refresh(force: true)
+        }
     }
 
     func requestAuthorization() async {
@@ -247,8 +266,9 @@ final class WeatherManager {
         pendingForce = false
         if let lastLocation {
             fetch(for: lastLocation, force: force)
-        } else if SystemStatus.shared.weather == nil {
-            state = .failed("Your location is unavailable. Try entering a city.")
+        } else {
+            if SystemStatus.shared.weather == nil { state = .failed("Your location is unavailable. Try entering a city.") }
+            scheduleRetry()
         }
     }
 
@@ -300,11 +320,15 @@ final class WeatherManager {
                 SystemStatus.shared.weather = snapshot
                 self.lastFetch = (location, Date(), fahrenheit)
                 self.fetchTask = nil
+                self.failures = 0
+                self.retryTask?.cancel()
+                self.retryTask = nil
                 self.state = .ready
             } catch {
                 guard !Task.isCancelled, let self else { return }
                 self.fetchTask = nil
                 self.state = .failed("Weather is unavailable right now.")
+                self.scheduleRetry()
             }
         }
     }
