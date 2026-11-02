@@ -1,4 +1,5 @@
 import AppKit
+import NotchCore
 import SwiftUI
 
 enum LockWidgetMetrics {
@@ -50,22 +51,5 @@ struct LockWidgetBackground: ViewModifier {
 extension View {
     func lockWidgetBackground(_ style: LockWidgetStyle) -> some View {
         modifier(LockWidgetBackground(style: style))
-    }
-}
-
-struct VisualEffectBackground: NSViewRepresentable {
-    let material: NSVisualEffectView.Material
-
-    func makeNSView(context: Context) -> NSVisualEffectView {
-        let view = NSVisualEffectView()
-        view.material = material
-        view.blendingMode = .behindWindow
-        view.state = .active
-        view.appearance = NSAppearance(named: .darkAqua)
-        return view
-    }
-
-    func updateNSView(_ view: NSVisualEffectView, context: Context) {
-        view.material = material
     }
 }

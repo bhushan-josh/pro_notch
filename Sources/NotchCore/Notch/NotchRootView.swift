@@ -2,6 +2,7 @@ import SwiftUI
 
 struct NotchRootView: View {
     @Environment(NotchModel.self) private var model
+    @AppStorage(CoreSettings.theme) private var theme
     @AppStorage(CoreSettings.contrastOutline) private var contrastOutline
     @State private var previousKind = IslandKind.idle
     private let center = ActivityCenter.shared
@@ -36,9 +37,14 @@ struct NotchRootView: View {
                 .frame(width: size.width + top * 2, height: size.height, alignment: .top)
                 .clipShape(shape)
                 .background {
-                    shape
-                        .fill(.black)
-                        .shadow(color: .black.opacity(open ? 0.4 : (hovering ? 0.25 : 0)), radius: open ? 18 : 8, y: open ? 8 : 2)
+                    IslandBackground(
+                        shape: shape,
+                        theme: theme,
+                        cap: model.geometry.hasPhysicalNotch || model.geometry.showsSimulatedNotch ? model.geometry.notchSize.height : 0,
+                        shadowOpacity: open ? 0.4 : (hovering ? 0.25 : 0),
+                        shadowRadius: open ? 18 : 8,
+                        shadowY: open ? 8 : 2
+                    )
                 }
                 .overlay {
                     if contrastOutline { shape.stroke(.white.opacity(0.14), lineWidth: 1) }
@@ -60,6 +66,7 @@ struct NotchRootView: View {
         .animation(.islandPress, value: model.isPressed)
         .animation(.islandExpand, value: model.selectedPageID)
         .animation(.islandExpand, value: model.geometry)
+        .animation(.easeInOut(duration: 0.25), value: theme)
         .onChange(of: kind) { _, new in previousKind = new }
         .ignoresSafeArea()
     }

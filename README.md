@@ -49,6 +49,7 @@ Pro Notch turns the MacBook notch into a black island that grows to show what's 
 - Opens on hover or with a swipe, skips tracks with sideways swipes, and gives haptic feedback.
 - Hides in fullscreen apps, in Mission Control and from screen recordings if you want.
 - Works on your built-in display or any display you choose.
+- Two looks: the classic black island, or glass that blurs what's behind it (**Settings → General**).
 
 ## Screenshots
 

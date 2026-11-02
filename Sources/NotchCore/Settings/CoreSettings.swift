@@ -27,6 +27,18 @@ public enum ExpandedHome: String, CaseIterable, Sendable {
     }
 }
 
+/// How the island is drawn.
+public enum NotchTheme: String, CaseIterable, Sendable {
+    case classic, glass
+
+    public var title: String {
+        switch self {
+        case .classic: "Classic"
+        case .glass: "Glass"
+        }
+    }
+}
+
 public enum ProgressStyle: String, CaseIterable, Sendable {
     case white, accent, stylized, glow
 
@@ -48,6 +60,7 @@ public enum CoreSettings {
     public static let expandOnHover = SettingKey("general.expandOnHover", default: true)
     public static let hoverDuration = SettingKey("general.hoverDuration", default: 0.25)
     public static let haptics = SettingKey("general.haptics", default: true)
+    public static let theme = SettingKey("general.theme", default: NotchTheme.classic)
     public static let contrastOutline = SettingKey("general.contrastOutline", default: false)
 
     public static let swipeToToggle = SettingKey("general.gestures.swipeToToggle", default: true)

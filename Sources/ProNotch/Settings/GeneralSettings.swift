@@ -27,6 +27,7 @@ struct GeneralSettingsView: View {
     @AppStorage(CoreSettings.expandOnHover) private var expandOnHover
     @AppStorage(CoreSettings.hoverDuration) private var hoverDuration
     @AppStorage(CoreSettings.haptics) private var haptics
+    @AppStorage(CoreSettings.theme) private var theme
     @AppStorage(CoreSettings.contrastOutline) private var contrastOutline
     @AppStorage(CoreSettings.swipeToToggle) private var swipeToToggle
     @AppStorage(CoreSettings.swipeToDismiss) private var swipeToDismiss
@@ -61,13 +62,20 @@ struct GeneralSettingsView: View {
                 }
             }
 
+            Section("Appearance") {
+                Picker("Theme", selection: $theme) {
+                    ForEach(NotchTheme.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                Toggle("Contrast Outline", isOn: $contrastOutline)
+            }
+
             Section("Behaviour") {
                 SettingsToggle("Expand on Hover", info: "Open the notch when the pointer rests on it.", isOn: $expandOnHover)
                 if expandOnHover {
                     SettingsSlider("Hover Duration", value: $hoverDuration, in: 0...1.5, step: 0.05, format: { String(format: "%.2fs", $0) })
                 }
                 Toggle("Haptic Feedback", isOn: $haptics)
-                Toggle("Contrast Outline", isOn: $contrastOutline)
                 SettingsSlider("Activity Duration", value: $activityDuration, in: 1...6, step: 0.5)
             }
 
