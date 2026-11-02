@@ -2,7 +2,8 @@ import CoreBluetooth
 import IOBluetooth
 import NotchCore
 
-/// Bluetooth connect and disconnect events. IOBluetooth delivers them on the main run loop through ObjC selectors.
+/// Bluetooth connect and disconnect events. IOBluetooth calls the selectors on its own queue on recent macOS
+/// (the main run loop on older releases), so each hops to the main actor before touching any state.
 @MainActor
 final class BluetoothMonitor: NSObject {
     var onConnect: ((_ device: IOBluetoothDevice, _ isInitial: Bool) -> Void)?
@@ -28,7 +29,12 @@ final class BluetoothMonitor: NSObject {
         disconnectNotifications.removeAll()
     }
 
-    @objc private func deviceConnected(_ notification: IOBluetoothUserNotification, device: IOBluetoothDevice) {
+    @objc nonisolated private func deviceConnected(_ notification: IOBluetoothUserNotification, device: IOBluetoothDevice) {
+        nonisolated(unsafe) let device = device
+        Task { @MainActor [weak self] in self?.handleConnected(device) }
+    }
+
+    private func handleConnected(_ device: IOBluetoothDevice) {
         guard let address = device.addressString else { return }
         disconnectNotifications[address]?.unregister()
         disconnectNotifications[address] = device.register(
@@ -39,7 +45,13 @@ final class BluetoothMonitor: NSObject {
         onConnect?(device, Date().timeIntervalSince(startedAt) < 2)
     }
 
-    @objc private func deviceDisconnected(_ notification: IOBluetoothUserNotification, device: IOBluetoothDevice) {
+    @objc nonisolated private func deviceDisconnected(_ notification: IOBluetoothUserNotification, device: IOBluetoothDevice) {
+        nonisolated(unsafe) let notification = notification
+        nonisolated(unsafe) let device = device
+        Task { @MainActor [weak self] in self?.handleDisconnected(notification, device: device) }
+    }
+
+    private func handleDisconnected(_ notification: IOBluetoothUserNotification, device: IOBluetoothDevice) {
         notification.unregister()
         if let address = device.addressString { disconnectNotifications.removeValue(forKey: address) }
         onDisconnect?(device)
