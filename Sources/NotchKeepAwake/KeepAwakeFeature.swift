@@ -37,12 +37,17 @@ public enum KeepAwakeSettings {
 @MainActor
 @Observable
 final class KeepAwakeManager: IdleActivityProvider {
+    /// Well under the shortest idle time a screen saver or lock policy can set.
+    private static let userActivityInterval: Duration = .seconds(60)
+
     private(set) var isActive = false
     private(set) var endsAt: Date?
     private(set) var idleActivityUpdatedAt = Date()
 
     @ObservationIgnored private var assertionID: IOPMAssertionID = 0
+    @ObservationIgnored private var userActivityID: IOPMAssertionID = 0
     @ObservationIgnored private var expiryTask: Task<Void, Never>?
+    @ObservationIgnored private var userActivityTask: Task<Void, Never>?
 
     func toggle() {
         if isActive {
@@ -54,11 +59,13 @@ final class KeepAwakeManager: IdleActivityProvider {
 
     func start(for duration: KeepAwakeDuration) {
         releaseAssertion()
-        let type = Defaults[KeepAwakeSettings.keepDisplayOn] ? kIOPMAssertionTypePreventUserIdleDisplaySleep : kIOPMAssertionTypePreventUserIdleSystemSleep
+        let keepDisplayOn = Defaults[KeepAwakeSettings.keepDisplayOn]
+        let type = keepDisplayOn ? kIOPMAssertionTypePreventUserIdleDisplaySleep : kIOPMAssertionTypePreventUserIdleSystemSleep
         var id: IOPMAssertionID = 0
         let result = IOPMAssertionCreateWithName(type as CFString, IOPMAssertionLevel(kIOPMAssertionLevelOn), "Pro Notch Keep Awake" as CFString, &id)
         guard result == kIOReturnSuccess else { return }
         assertionID = id
+        if keepDisplayOn { startDeclaringUserActivity() }
         isActive = true
         idleActivityUpdatedAt = Date()
         expiryTask?.cancel()
@@ -89,7 +96,30 @@ final class KeepAwakeManager: IdleActivityProvider {
     /// The indicator setting is read from UserDefaults, which SwiftUI does not observe.
     func settingsChanged() { idleActivityUpdatedAt = Date() }
 
+    /// The screen saver lock counts idle time from the last user activity, which a display-sleep
+    /// assertion alone does not reset; declaring activity resets it the way input does.
+    private func startDeclaringUserActivity() {
+        userActivityTask = Task { [weak self] in
+            while !Task.isCancelled {
+                self?.declareUserActivity()
+                try? await Task.sleep(for: Self.userActivityInterval)
+            }
+        }
+    }
+
+    private func declareUserActivity() {
+        // Declaring activity wakes the display, so leave a screen the user locked dark.
+        guard !SystemStatus.shared.isScreenLocked else { return }
+        IOPMAssertionDeclareUserActivity("Pro Notch Keep Awake" as CFString, kIOPMUserActiveLocal, &userActivityID)
+    }
+
     private func releaseAssertion() {
+        userActivityTask?.cancel()
+        userActivityTask = nil
+        if userActivityID != 0 {
+            IOPMAssertionRelease(userActivityID)
+            userActivityID = 0
+        }
         guard assertionID != 0 else { return }
         IOPMAssertionRelease(assertionID)
         assertionID = 0
